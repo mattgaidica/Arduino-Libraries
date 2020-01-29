@@ -1,4 +1,4 @@
-#include <SPI.h>
+// #include <SPI.h>
 SPISettings SPI_ads(SPI_FREQ, MSBFIRST, SPI_MODE1);
 SPISettings SPI_fram(SPI_FREQ, MSBFIRST, SPI_MODE0);
 bool doDebug = false;
@@ -121,16 +121,14 @@ void fram_writeByte(int32_t memAddr, byte data) {
   fram_off();
   fram_writeDisable();
 }
-byte *fram_readChunk(int32_t memAddr) {
-  // op-code, addr, addr, addr, dummy 8-cycles, read 4 bytes (int)
-  //  uBuf[0] = READ;
-  //  uBuf[1] = memAddr >> 16;
-  //  uBuf[2] = memAddr >> 8;
-  //  uBuf[3] = memAddr;
-  byte myBuf[4] = {FRAM_OP_READ, memAddr >> 16, memAddr >> 8, memAddr};
+void fram_readChunk(uint32_t memAddr, byte *values, size_t sz) {
+  byte addrBuf[4] = {FRAM_OP_READ, memAddr >> 16, memAddr >> 8, memAddr};
   fram_on();
-  SPI.transfer(&myBuf, sizeof(myBuf));
-  // SPI.transfer(&uBuf, sizeof(uBuf));
+  SPI.transfer(&addrBuf, sizeof(addrBuf));
+  for (size_t i = 0; i < sz; i++) {
+    byte x = SPI.transfer(0);
+    values[i] = x;
+  }
   fram_off();
 }
 // technically could read larger data sizes
@@ -169,13 +167,17 @@ void ads_wreg(byte rrrrr, byte data) {
 }
 
 void ads_read() {
-  size_t bufSz = (24 + (6 * 24)) / 8;
+  size_t bufSz = (24 + (ADSchs * 24)) / 8;
   byte myBuf[bufSz] = {};
   while (digitalRead(ADS_DRDY)) {} // wait for _DRDY to go low
   ads_on();
   SPI.transfer(&myBuf, sizeof(myBuf));
   ads_off();
   ads_ch1 = sign24to32(myBuf[3], myBuf[4], myBuf[5]);
+  ads_ch2 = sign24to32(myBuf[6], myBuf[7], myBuf[8]);
+  ads_ch3 = sign24to32(myBuf[9], myBuf[10], myBuf[11]);
+  ads_ch4 = sign24to32(myBuf[12], myBuf[13], myBuf[14]);
+
   //  int i;
   //  print_buffer(myBuf,sizeof(myBuf));
   //  for (i = 1; i <= 1; i++) {
