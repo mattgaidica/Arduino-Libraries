@@ -30,14 +30,17 @@ void arbo_init(bool ovr_doDebug) {
   if (doDebug) {
     Serial.begin(9600);
     while (!Serial) {};
+//    if (!sd.begin(SD_CS, SD_SCK_MHZ(1))) { // replace with SPI_fram
+//      Serial.println("SD ERROR");
+//    }
     Serial.println("ARBO initialized...");
-  }if (Serial.available() > 0) {
-      
+  } if (Serial.available() > 0) {
+
   }
 }
 
 void arbo_blink(int postdelay) {
-  for (int i=0;i<3;i++) {
+  for (int i = 0; i < 3; i++) {
     digitalWrite(RED_LED, HIGH);
     delay(50);
     digitalWrite(RED_LED, LOW);
@@ -76,6 +79,12 @@ void fram_wake() {
   // just toggle CS to wake
   digitalWrite(FRAM_CS, LOW);
   digitalWrite(FRAM_CS, HIGH);
+}
+void fram_holdOn() {
+  digitalWrite(FRAM_HOLD, LOW);
+}
+void fram_holdOff() {
+  digitalWrite(FRAM_HOLD, HIGH);
 }
 void fram_writeEnable() {
   byte myBuf[1] = {FRAM_OP_WREN};
@@ -261,11 +270,11 @@ void print_buffer(byte arry[], int sz) {
   }
 }
 float measureBatt() {
-  pinMode(FRAM_HOLD,INPUT);
+  pinMode(FRAM_HOLD, INPUT);
   float measuredvbat = analogRead(FRAM_HOLD);
   measuredvbat *= 2;    // we divided by 2, so multiply back
   measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
   measuredvbat /= 1024; // convert to voltage
-  pinMode(FRAM_HOLD,OUTPUT);
+  pinMode(FRAM_HOLD, OUTPUT);
   return measuredvbat;
 }

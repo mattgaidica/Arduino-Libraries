@@ -4,6 +4,7 @@
 #include "Arduino.h"
 
 #define SPI_FREQ 1000000
+#define maxMem 0x1FFFF
 
 // FRAM op-codes
 #define  FRAM_OP_WREN    0x06 //0b00000110
@@ -31,7 +32,6 @@ union ArrayToInteger {
  byte array[4];
  int32_t integer;
 };
-
 
 class ARBO {
 public:
