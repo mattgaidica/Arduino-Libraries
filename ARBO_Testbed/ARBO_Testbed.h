@@ -12,6 +12,8 @@
 #define RED_LED 	13
 #define SD_CS		4
 #define SD_DET 		7
+
+#define ADSchs		6
 // #define ACCEL_INT 	4 // analog pin 4!
 
 #endif

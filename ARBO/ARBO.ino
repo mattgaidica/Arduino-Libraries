@@ -5,6 +5,7 @@ bool doDebug = false;
 
 void arbo_init(bool ovr_doDebug) {
   pinMode(ACCEL_CS, OUTPUT);
+  pinMode(ACCEL_INT, INPUT_PULLUP);
   pinMode(ADS_CS, OUTPUT);
   pinMode(ADS_DRDY, INPUT);
   pinMode(ADS_PWDN, OUTPUT);
@@ -39,11 +40,12 @@ void arbo_init(bool ovr_doDebug) {
   }
 }
 
+// hard-coding pin13 for compatibility with mini
 void arbo_blink(int postdelay) {
   for (int i = 0; i < 3; i++) {
-    digitalWrite(RED_LED, HIGH);
+    digitalWrite(13, HIGH);
     delay(50);
-    digitalWrite(RED_LED, LOW);
+    digitalWrite(13, LOW);
     delay(50);
   }
   delay(postdelay);
@@ -277,4 +279,65 @@ float measureBatt() {
   measuredvbat /= 1024; // convert to voltage
   pinMode(FRAM_HOLD, OUTPUT);
   return measuredvbat;
+}
+
+float average (int32_t * array, int len) {
+  long sum = 0L ;  // sum will be larger than an item, long for safety.
+  for (int i = 0 ; i < len ; i++) {
+    sum += array [i] ;
+  }
+  return  ((float) sum) / len ;  // average will be fractional, so float may be appropriate.
+}
+
+void printFormattedFloat(float val, uint8_t leading, uint8_t decimals) {
+  float aval = abs(val);
+  if (val < 0) {
+    Serial.print("-");
+  } else {
+    Serial.print(" ");
+  }
+  for ( uint8_t indi = 0; indi < leading; indi++ ) {
+    uint32_t tenpow = 0;
+    if ( indi < (leading - 1) ) {
+      tenpow = 1;
+    }
+    for (uint8_t c = 0; c < (leading - 1 - indi); c++) {
+      tenpow *= 10;
+    }
+    if ( aval < tenpow) {
+      Serial.print("0");
+    } else {
+      break;
+    }
+  }
+  if (val < 0) {
+    Serial.print(-val, decimals);
+  } else {
+    Serial.print(val, decimals);
+  }
+}
+
+void printScaledAGMT( ICM_20948_AGMT_t agmt) {
+  Serial.print("Scaled. Acc (mg) [ ");
+  printFormattedFloat( myICM.accX(), 5, 2 );
+  Serial.print(", ");
+  printFormattedFloat( myICM.accY(), 5, 2 );
+  Serial.print(", ");
+  printFormattedFloat( myICM.accZ(), 5, 2 );
+  Serial.print(" ], Gyr (DPS) [ ");
+  printFormattedFloat( myICM.gyrX(), 5, 2 );
+  Serial.print(", ");
+  printFormattedFloat( myICM.gyrY(), 5, 2 );
+  Serial.print(", ");
+  printFormattedFloat( myICM.gyrZ(), 5, 2 );
+  Serial.print(" ], Mag (uT) [ ");
+  printFormattedFloat( myICM.magX(), 5, 2 );
+  Serial.print(", ");
+  printFormattedFloat( myICM.magY(), 5, 2 );
+  Serial.print(", ");
+  printFormattedFloat( myICM.magZ(), 5, 2 );
+  Serial.print(" ], Tmp (C) [ ");
+  printFormattedFloat( myICM.temp(), 5, 2 );
+  Serial.print(" ]");
+  Serial.println();
 }

@@ -14,4 +14,6 @@
 #define ACCEL_CS 	1
 #define ACCEL_INT 	0
 
+#define ADSchs		4
+
 #endif
