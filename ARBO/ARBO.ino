@@ -82,18 +82,60 @@ void accel_whoami() {
   SPI.endTransaction();
   print_buffer(whoami, 2);
 }
+
+// still does not work :(
 void enableWOM() {
   SPI.beginTransaction(SPI_fram);
   digitalWrite(ACCEL_CS, LOW);
+  
+  byte bankSelA[2] = {0x7F,0x00};
+  SPI.transfer(&bankSelA, sizeof(bankSelA));
+  delay(300);
+  byte RESET[2] = {0x06,0x80};
+  SPI.transfer(&RESET, sizeof(RESET));
+  delay(300);
+  byte pwrMgmt1[2] = {0x06,0x00};
+  SPI.transfer(&pwrMgmt1, sizeof(pwrMgmt1));
+  delay(300);
+  byte pwrMgmt2[2] = {0x07,0x38};
+  SPI.transfer(&pwrMgmt2, sizeof(pwrMgmt2));
+  delay(300);
+  
+  byte bankSelB[2] = {0x7F,0x20};
+  SPI.transfer(&bankSelB, sizeof(bankSelB));
+  delay(300);
+  byte accelCfg[2] = {0x14,0x09};
+  SPI.transfer(&accelCfg, sizeof(accelCfg));
+  delay(300);
+
+  byte bankSelC[2] = {0x7F,0x00};
+  SPI.transfer(&bankSelC, sizeof(bankSelC));
+  delay(300);
   byte enWOM[2] = {0x10, 0x08};
   SPI.transfer(&enWOM, sizeof(enWOM));
+  delay(300);
+  
+  byte bankSelD[2] = {0x7F,0x20};
+  SPI.transfer(&bankSelD, sizeof(bankSelD));
+  delay(300);
   byte WOMlogic[2] = {0x12, 0x03};
   SPI.transfer(&WOMlogic, sizeof(WOMlogic));
-  byte WOMthresh[2] = {0x13, 0x01};
+  delay(300);
+  byte WOMthresh[2] = {0x13, 0x00};
   SPI.transfer(&WOMthresh, sizeof(WOMthresh));
+  delay(300);
+
+  byte bankSelE[2] = {0x7F,0x00};
+  SPI.transfer(&bankSelE, sizeof(bankSelE));
+  delay(300);
+  byte intCfg[2] = {0x0F, 0x80}; // 0xA0 for latching int, 0x80 for 50us pulse
+  SPI.transfer(&intCfg, sizeof(intCfg));
+  delay(300);
+  byte lpCfg[2] = {0x05, 0x10};
+  SPI.transfer(&lpCfg, sizeof(lpCfg));
+  delay(300);
   digitalWrite(ACCEL_CS, HIGH);
   SPI.endTransaction();
-  delay(1000);
 }
 
 // FRAM START //
@@ -290,6 +332,10 @@ void ads_powerUp() {
 // ADS END
 
 // HELPERS
+int32_t addHeader(int32_t data, byte addr) {
+  int32_t proto = conv24to32(addr,0,0,0);
+  return proto | data;
+}
 void incFileName() {
   sprintf(fileName, "%08d.arbo", fileNumber);
   fileNumber++;
