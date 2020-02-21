@@ -10,6 +10,7 @@
 #define FRAM_CS		13 // rewired to RED_LED
 #define FRAM_HOLD 	9 // rewired to RD_VBATT
 #define SD_CS		5
+#define SD_DET		21 // placeholder
 
 #define ACCEL_CS 	1
 #define ACCEL_INT 	0

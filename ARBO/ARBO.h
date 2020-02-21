@@ -16,7 +16,6 @@
 #define  FRAM_OP_RDID    0x9F //0b10011111
 #define  FRAM_OP_FSTRD   0x0B //0b00001011
 #define  FRAM_OP_SLEEP   0xB9 //0b10111001
-// uint32_t maxMem   0x1FFFF;
 
 // ADS129x op-codes
 #define  ADS_OP_RDATAC	0x10
@@ -27,6 +26,17 @@
 #define  ADS_OP_RREG   	0x20
 #define  ADS_OP_WREG   	0x40
 #define  ADS_OP_DEVID   0x00
+
+// header schema
+#define rec_ADSch1 	0x01
+#define rec_ADSch2 	0x02
+#define rec_ADSch3	0x03
+#define rec_ADSch4 	0x04
+#define rec_accelX 	0x05
+#define rec_accelY 	0x06
+#define rec_accelZ 	0x07
+#define rec_accelT 	0x08
+// filenames encoded with time?
 
 union ArrayToInteger {
  byte array[4];

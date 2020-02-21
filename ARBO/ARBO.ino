@@ -1,11 +1,11 @@
 // #include <SPI.h>
 SPISettings SPI_ads(SPI_FREQ, MSBFIRST, SPI_MODE1);
 SPISettings SPI_fram(SPI_FREQ, MSBFIRST, SPI_MODE0);
-bool doDebug = false;
+bool doDebug;
 
 void arbo_init(bool ovr_doDebug) {
   pinMode(ACCEL_CS, OUTPUT);
-  pinMode(ACCEL_INT, INPUT_PULLUP);
+  //  pinMode(ACCEL_INT, INPUT_PULLUP);
   pinMode(ADS_CS, OUTPUT);
   pinMode(ADS_DRDY, INPUT);
   pinMode(ADS_PWDN, OUTPUT);
@@ -15,6 +15,7 @@ void arbo_init(bool ovr_doDebug) {
   pinMode(GRN_LED, OUTPUT);
   pinMode(RED_LED, OUTPUT);
   pinMode(SD_CS, OUTPUT);
+  pinMode(SD_DET, INPUT);
 
   digitalWrite(ACCEL_CS, HIGH);
   digitalWrite(ADS_CS, HIGH);
@@ -31,12 +32,12 @@ void arbo_init(bool ovr_doDebug) {
   if (doDebug) {
     Serial.begin(9600);
     while (!Serial) {};
-//    if (!sd.begin(SD_CS, SD_SCK_MHZ(1))) { // replace with SPI_fram
-//      Serial.println("SD ERROR");
-//    }
-    Serial.println("ARBO initialized...");
-  } if (Serial.available() > 0) {
-
+    //    if (!sd.begin(SD_CS, SD_SCK_MHZ(1))) { // replace with SPI_fram
+    //      Serial.println("SD ERROR");
+    //    }
+    Serial.println("ARBO");
+  } else {
+    delay(12000); // give time to reprogram
   }
 }
 
@@ -61,6 +62,39 @@ void arbo_blink(int postdelay) {
 //     }
 //   }
 // }
+
+// ACCEL override
+void accel_readInt() {
+  SPI.beginTransaction(SPI_fram);
+  digitalWrite(ACCEL_CS, LOW);
+  byte readInt[2] = {0x99};
+  SPI.transfer(&readInt, sizeof(readInt));
+  digitalWrite(ACCEL_CS, HIGH);
+  SPI.endTransaction();
+  print_buffer(readInt, 2);
+}
+void accel_whoami() {
+  SPI.beginTransaction(SPI_fram);
+  digitalWrite(ACCEL_CS, LOW);
+  byte whoami[2] = {0x80};
+  SPI.transfer(&whoami, sizeof(whoami));
+  digitalWrite(ACCEL_CS, HIGH);
+  SPI.endTransaction();
+  print_buffer(whoami, 2);
+}
+void enableWOM() {
+  SPI.beginTransaction(SPI_fram);
+  digitalWrite(ACCEL_CS, LOW);
+  byte enWOM[2] = {0x10, 0x08};
+  SPI.transfer(&enWOM, sizeof(enWOM));
+  byte WOMlogic[2] = {0x12, 0x03};
+  SPI.transfer(&WOMlogic, sizeof(WOMlogic));
+  byte WOMthresh[2] = {0x13, 0x01};
+  SPI.transfer(&WOMthresh, sizeof(WOMthresh));
+  digitalWrite(ACCEL_CS, HIGH);
+  SPI.endTransaction();
+  delay(1000);
+}
 
 // FRAM START //
 void fram_on() {
@@ -184,10 +218,10 @@ void ads_read() {
   ads_on();
   SPI.transfer(&myBuf, sizeof(myBuf));
   ads_off();
-  ads_ch1 = sign24to32(myBuf[3], myBuf[4], myBuf[5]);
-  ads_ch2 = sign24to32(myBuf[6], myBuf[7], myBuf[8]);
-  ads_ch3 = sign24to32(myBuf[9], myBuf[10], myBuf[11]);
-  ads_ch4 = sign24to32(myBuf[12], myBuf[13], myBuf[14]);
+  ads_ch1 = conv24to32(myBuf[5], myBuf[4], myBuf[3], rec_ADSch1);
+  ads_ch2 = conv24to32(myBuf[8], myBuf[7], myBuf[6], rec_ADSch2);
+  ads_ch3 = conv24to32(myBuf[11], myBuf[10], myBuf[9], rec_ADSch3);
+  ads_ch4 = conv24to32(myBuf[14], myBuf[13], myBuf[12], rec_ADSch4);
 
   //  int i;
   //  print_buffer(myBuf,sizeof(myBuf));
@@ -244,21 +278,39 @@ void ads_off() {
   digitalWrite(ADS_CS, HIGH);
   SPI.endTransaction();
 }
+void ads_powerDown() {
+  ads_cmd(ADS_OP_SDATAC); // stop conversion
+  digitalWrite(ADS_PWDN, LOW);
+  // SHUTDOWN int buffer and channels
+}
+void ads_powerUp() {
+  ads_cmd(ADS_OP_RDATAC); // cont conversion
+  digitalWrite(ADS_PWDN, HIGH);
+}
 // ADS END
 
 // HELPERS
-int32_t sign24to32(byte b1, byte b2, byte b3) {
-  ArrayToInteger converter;
-  converter.array[0] = b3;
-  converter.array[1] = b2;
-  converter.array[2] = b1;
-  converter.array[3] = 0;
-  // return converter.integer;
-  if (converter.integer & 0x00800000) {
-    return converter.integer |= 0xFF000000;
+void incFileName() {
+  sprintf(fileName, "%08d.arbo", fileNumber);
+  fileNumber++;
+}
+int32_t sign32(int32_t val) {
+  if (val & 0x00800000) {
+    return val |= 0xFF000000;
   } else {
-    return converter.integer;
+    return val;
   }
+}
+int32_t conv24to32(byte b0, byte b1, byte b2, byte b3) {
+  ArrayToInteger converter;
+  converter.array[0] = b0;
+  converter.array[1] = b1;
+  converter.array[2] = b2;
+  converter.array[3] = b3; // header
+  return converter.integer;
+}
+int32_t rmHeader(int32_t val) {
+  return 0x00FFFFFF & val;
 }
 
 void print_buffer(byte arry[], int sz) {
@@ -287,57 +339,4 @@ float average (int32_t * array, int len) {
     sum += array [i] ;
   }
   return  ((float) sum) / len ;  // average will be fractional, so float may be appropriate.
-}
-
-void printFormattedFloat(float val, uint8_t leading, uint8_t decimals) {
-  float aval = abs(val);
-  if (val < 0) {
-    Serial.print("-");
-  } else {
-    Serial.print(" ");
-  }
-  for ( uint8_t indi = 0; indi < leading; indi++ ) {
-    uint32_t tenpow = 0;
-    if ( indi < (leading - 1) ) {
-      tenpow = 1;
-    }
-    for (uint8_t c = 0; c < (leading - 1 - indi); c++) {
-      tenpow *= 10;
-    }
-    if ( aval < tenpow) {
-      Serial.print("0");
-    } else {
-      break;
-    }
-  }
-  if (val < 0) {
-    Serial.print(-val, decimals);
-  } else {
-    Serial.print(val, decimals);
-  }
-}
-
-void printScaledAGMT( ICM_20948_AGMT_t agmt) {
-  Serial.print("Scaled. Acc (mg) [ ");
-  printFormattedFloat( myICM.accX(), 5, 2 );
-  Serial.print(", ");
-  printFormattedFloat( myICM.accY(), 5, 2 );
-  Serial.print(", ");
-  printFormattedFloat( myICM.accZ(), 5, 2 );
-  Serial.print(" ], Gyr (DPS) [ ");
-  printFormattedFloat( myICM.gyrX(), 5, 2 );
-  Serial.print(", ");
-  printFormattedFloat( myICM.gyrY(), 5, 2 );
-  Serial.print(", ");
-  printFormattedFloat( myICM.gyrZ(), 5, 2 );
-  Serial.print(" ], Mag (uT) [ ");
-  printFormattedFloat( myICM.magX(), 5, 2 );
-  Serial.print(", ");
-  printFormattedFloat( myICM.magY(), 5, 2 );
-  Serial.print(", ");
-  printFormattedFloat( myICM.magZ(), 5, 2 );
-  Serial.print(" ], Tmp (C) [ ");
-  printFormattedFloat( myICM.temp(), 5, 2 );
-  Serial.print(" ]");
-  Serial.println();
 }
