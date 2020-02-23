@@ -326,15 +326,15 @@ void ads_powerDown() {
   // SHUTDOWN int buffer and channels
 }
 void ads_powerUp() {
-  ads_cmd(ADS_OP_RDATAC); // cont conversion
   digitalWrite(ADS_PWDN, HIGH);
+  delay(5);
+  ads_cmd(ADS_OP_RDATAC); // cont conversion
 }
 // ADS END
 
 // HELPERS
-int32_t addHeader(int32_t data, byte addr) {
-  int32_t proto = conv24to32(addr,0,0,0);
-  return proto | data;
+int32_t addHeader(uint32_t data, byte head) {
+  return conv24to32(data,data>>8,data>>16,head);
 }
 void incFileName() {
   sprintf(fileName, "%08d.arbo", fileNumber);
