@@ -2,7 +2,7 @@
 //
 //    FILE: ADS1X15.H
 //  AUTHOR: Rob Tillaart
-// VERSION: 0.3.4
+// VERSION: 0.3.7
 //    DATE: 2013-03-24
 // PUPROSE: Arduino library for ADS1015 and ADS1115
 //     URL: https://github.com/RobTillaart/ADS1X15
@@ -12,23 +12,23 @@
 #include "Arduino.h"
 #include "Wire.h"
 
-#define ADS1X15_LIB_VERSION               (F("0.3.4"))
+#define ADS1X15_LIB_VERSION               (F("0.3.7"))
 
 // allow compile time default address
 // address in { 0x48, 0x49, 0x4A, 0x4B }, no test...
 #ifndef ADS1015_ADDRESS
-#define ADS1015_ADDRESS             0x48
+#define ADS1015_ADDRESS                   0x48
 #endif
 
 #ifndef ADS1115_ADDRESS
-#define ADS1115_ADDRESS             0x48
+#define ADS1115_ADDRESS                   0x48
 #endif
 
 
-#define ADS1X15_OK                  0
-#define ADS1X15_INVALID_VOLTAGE     -100
-#define ADS1X15_INVALID_GAIN        0xFF
-#define ADS1X15_INVALID_MODE        0xFE
+#define ADS1X15_OK                        0
+#define ADS1X15_INVALID_VOLTAGE           -100
+#define ADS1X15_INVALID_GAIN              0xFF
+#define ADS1X15_INVALID_MODE              0xFE
 
 
 class ADS1X15
@@ -37,7 +37,7 @@ public:
   void     reset();
 
 #if defined (ESP8266) || defined(ESP32)
-  bool     begin(uint8_t sda, uint8_t scl);
+  bool     begin(int sda, int scl);
 #endif
   bool     begin();
   bool     isConnected();
@@ -67,7 +67,7 @@ public:
   void     setDataRate(uint8_t dataRate = 4); // invalid values are mapped on 4 (default)
   uint8_t  getDataRate();                     // actual speed depends on device
 
-  int16_t  readADC(uint8_t pin);
+  int16_t  readADC(uint8_t pin = 0);
   int16_t  readADC_Differential_0_1();
 
   // used by continuous mode and async mode.
@@ -76,9 +76,9 @@ public:
 
 
   // ASYNC INTERFACE
-  // requestADC(pin) -> isBusy() or isReady() -> getValue(); 
+  // requestADC(pin) -> isBusy() or isReady() -> getValue();
   // see examples
-  void     requestADC(uint8_t pin);
+  void     requestADC(uint8_t pin = 0);
   void     requestADC_Differential_0_1();
   bool     isBusy();
   bool     isReady();
@@ -115,7 +115,9 @@ public:
 
   int8_t   getError();
 
-  void     setWireClock(uint32_t clockSpeed);
+  // EXPERIMENTAL
+  // see https://github.com/RobTillaart/ADS1X15/issues/22
+  void     setWireClock(uint32_t clockSpeed = 100000);
   // proto - getWireClock returns the value set by setWireClock not necessary the actual value
   uint32_t getWireClock();
 
@@ -144,7 +146,7 @@ protected:
   // COMPARATOR variables
   // TODO merge these into one COMPARATOR MASK?  (low priority)
   //      would speed up code in _requestADC() and save 3 bytes RAM.
-  // TODO boolean flags for first three, or make it mask value that 
+  // TODO boolean flags for first three, or make it mask value that
   //      can be or-ed.   (low priority)
   uint8_t  _compMode;
   uint8_t  _compPol;
@@ -161,6 +163,7 @@ protected:
   uint32_t  _clockSpeed = 0;
 };
 
+
 ///////////////////////////////////////////////////////////////////////////
 //
 // Derived classes from ADS1X15
@@ -171,11 +174,13 @@ public:
   ADS1013(uint8_t Address = ADS1015_ADDRESS, TwoWire *wire = &Wire);
 };
 
+
 class ADS1014 : public ADS1X15
 {
 public:
   ADS1014(uint8_t Address = ADS1015_ADDRESS, TwoWire *wire = &Wire);
 };
+
 
 class ADS1015 : public ADS1X15
 {
@@ -191,6 +196,7 @@ public:
   void     requestADC_Differential_2_3();
 };
 
+
 ///////////////////////////////////////////////////////////////////////////
 //
 // Derived classes from ADS1X15
@@ -201,11 +207,13 @@ public:
   ADS1113(uint8_t address = ADS1115_ADDRESS, TwoWire *wire = &Wire);
 };
 
+
 class ADS1114 : public ADS1X15
 {
 public:
   ADS1114(uint8_t address = ADS1115_ADDRESS, TwoWire *wire = &Wire);
 };
+
 
 class ADS1115 : public ADS1X15
 {
@@ -221,4 +229,6 @@ public:
   void     requestADC_Differential_2_3();
 };
 
+
 // --- END OF FILE ---
+

@@ -1,29 +1,10 @@
 //
 //    FILE: ADS1X15.cpp
 //  AUTHOR: Rob Tillaart
-// VERSION: 0.3.4
+// VERSION: 0.3.7
 //    DATE: 2013-03-24
 // PUPROSE: Arduino library for ADS1015 and ADS1115
 //     URL: https://github.com/RobTillaart/ADS1X15
-//
-//  HISTORY:
-//  0.0.0   2013-03-24  initial version
-//  0.0.1   2013-03-24  first working version
-//  0.1.0   2017-07-31  removed pre 1.0 support; added getVoltage
-//  0.2.0   2020-04-08  initial release; refactor ad fundum;
-//  0.2.1   2020-08-15  fix issue 2 gain; refactor
-//  0.2.2   2020-08-18  add begin(sda, scl) for ESP32
-//  0.2.3   2020-08-20  add comparator code + async mode
-//  0.2.4   2020-08-26  check readme.md  and minor fixes
-//  0.2.5   2020-08-26  add missing readADC_Differential_X_X()
-//  0.2.6   2020-09-01  fix #12 - fix getMaxVoltage + minor refactor
-//  0.2.7   2020-09-27  redo readRegister() + getValue() + getError()
-//  0.3.0   2021-03-29  add Wire parameter to constructors.
-//  0.3.1   2021-04-25  #22, add get/setClock() for Wire speed + reset()
-//  0.3.2   2021-10-07  fix build-CI; update readme + add new examples
-//  0.3.3   2021-10-17  update build-CI (esp32), readme.md, keywords.txt
-//  0.3.4   2021-12-11  update library.json, license, minor edits incl layout)
-//                      add unit test constants.
 
 
 #include "ADS1X15.h"
@@ -159,7 +140,7 @@ void ADS1X15::reset()
 
 
 #if defined (ESP8266) || defined(ESP32)
-bool ADS1X15::begin(uint8_t sda, uint8_t scl)
+bool ADS1X15::begin(int sda, int scl)
 {
   _wire = &Wire;
   _wire->begin(sda, scl);
@@ -380,13 +361,18 @@ void ADS1X15::setWireClock(uint32_t clockSpeed)
 }
 
 
+//////////////////////////////////////////////////////
+//
+// EXPERIMENTAL
+//
+// see https://github.com/RobTillaart/ADS1X15/issues/22
+//     https://github.com/arduino/Arduino/issues/11457
 // TODO: get the real clock speed from the I2C interface if possible.
-// ESP ==> ??
 uint32_t ADS1X15::getWireClock()
 {
-#if defined(__AVR__)
-  // uint32_t speed = F_CPU / ((TWBR * 2) + 16);
-  uint32_t speed = 400000L; // Matt for Nano Every
+// UNO 328 and
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
+  uint32_t speed = F_CPU / ((TWBR * 2) + 16);
   return speed;
 
 #elif defined(ESP32)
@@ -397,7 +383,7 @@ uint32_t ADS1X15::getWireClock()
 // not supported.
 // return -1;
 
-#else  // best effort ...
+#else  // best effort is remembering it
   return _clockSpeed;
 #endif
 }
@@ -457,7 +443,7 @@ uint16_t ADS1X15::_readRegister(uint8_t address, uint8_t reg)
   _wire->write(reg);
   _wire->endTransmission();
 
-  int rv = _wire->requestFrom(address, (uint8_t) 2);
+  int rv = _wire->requestFrom((int) address, (int) 2);
   if (rv == 2)
   {
     uint16_t value = _wire->read() << 8;

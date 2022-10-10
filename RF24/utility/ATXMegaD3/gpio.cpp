@@ -15,7 +15,8 @@ void GPIO::open(int port, int DDR)
     PORT_t* p = GPIO_getPort(port, &pin);
     if (DDR == 0) {
         p->DIRCLR = pin;
-    } else if (DDR == 1) {
+    }
+    else if (DDR == 1) {
         p->DIRSET = pin;
     }
 }
@@ -25,7 +26,7 @@ void GPIO::close(int port)
     // Nothing to do with close;
 }
 
-int read(int port)
+int GPIO::read(int port)
 {
     uint8_t pin;
     PORT_t* p = GPIO_getPort(port, &pin);
@@ -38,9 +39,8 @@ void GPIO::write(int port, int value)
     PORT_t* p = GPIO_getPort(port, &pin);
     if (value == 0) {
         p->OUTCLR = pin;
-    } else if (value == 1) {
+    }
+    else if (value == 1) {
         p->OUTSET = pin;
     }
-
 }
-

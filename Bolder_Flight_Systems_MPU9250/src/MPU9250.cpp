@@ -1,1105 +1,652 @@
 /*
-MPU9250.cpp
-Brian R Taylor
-brian.taylor@bolderflight.com
-
-Copyright (c) 2017 Bolder Flight Systems
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
-and associated documentation files (the "Software"), to deal in the Software without restriction, 
-including without limitation the rights to use, copy, modify, merge, publish, distribute, 
-sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is 
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or 
-substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING 
-BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+* Brian R Taylor
+* brian.taylor@bolderflight.com
+* 
+* Copyright (c) 2022 Bolder Flight Systems Inc
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the “Software”), to
+* deal in the Software without restriction, including without limitation the
+* rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+* sell copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+* IN THE SOFTWARE.
 */
 
-#include "Arduino.h"
-#include "MPU9250.h"
+#include "mpu9250.h"  // NOLINT
+#if defined(ARDUINO)
+#include <Arduino.h>
+#include "Wire.h"
+#include "SPI.h"
+#else
+#include "core/core.h"
+#endif
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include "units.h"  // NOLINT
+#include "eigen.h"  // NOLINT
+#include "Eigen/Dense"
 
-/* MPU9250 object, input the I2C bus and address */
-MPU9250::MPU9250(TwoWire &bus,uint8_t address){
-  _i2c = &bus; // I2C bus
-  _address = address; // I2C address
-  _useSPI = false; // set to use I2C
+namespace bfs {
+
+void Mpu9250::Config(TwoWire *i2c, const I2cAddr addr) {
+  i2c_ = i2c;
+  dev_ = static_cast<uint8_t>(addr);
+  iface_ = I2C;
 }
-
-/* MPU9250 object, input the SPI bus and chip select pin */
-MPU9250::MPU9250(SPIClass &bus,uint8_t csPin){
-  _spi = &bus; // SPI bus
-  _csPin = csPin; // chip select pin
-  _useSPI = true; // set to use SPI
+void Mpu9250::Config(SPIClass *spi, const uint8_t cs) {
+  spi_ = spi;
+  dev_ = cs;
+  iface_ = SPI;
 }
-
-/* starts communication with the MPU-9250 */
-int MPU9250::begin(){
-  if( _useSPI ) { // using SPI for communication
-    // use low speed SPI for register setting
-    _useSPIHS = false;
-    // setting CS pin to output
-    pinMode(_csPin,OUTPUT);
-    // setting CS pin high
-    digitalWrite(_csPin,HIGH);
-    // begin SPI communication
-    _spi->begin();
-  } else { // using I2C for communication
-    // starting the I2C bus
-    _i2c->begin();
-    // setting the I2C clock
-    _i2c->setClock(_i2cRate);
+bool Mpu9250::Begin() {
+  if (iface_ == SPI) {
+    pinMode(dev_, OUTPUT);
+    /* Toggle CS pin to lock in SPI mode */
+    digitalWrite(dev_, LOW);
+    delay(1);
+    digitalWrite(dev_, HIGH);
+    delay(1);
   }
-  // select clock source to gyro
-  if(writeRegister(PWR_MGMNT_1,CLOCK_SEL_PLL) < 0){
-    return -1;
+  /* 1 MHz for config */
+  spi_clock_ = SPI_CFG_CLOCK_;
+  /* Select clock source to gyro */
+  if (!WriteRegister(PWR_MGMNT_1_, CLKSEL_PLL_)) {
+    return false;
   }
-  // enable I2C master mode
-  if(writeRegister(USER_CTRL,I2C_MST_EN) < 0){
-    return -2;
+  /* Enable I2C master mode */
+  if (!WriteRegister(USER_CTRL_, I2C_MST_EN_)) {
+    return false;
   }
-  // set the I2C bus speed to 400 kHz
-  if(writeRegister(I2C_MST_CTRL,I2C_MST_CLK) < 0){
-    return -3;
+  /* Set the I2C bus speed to 400 kHz */
+  if (!WriteRegister(I2C_MST_CTRL_, I2C_MST_CLK_)) {
+    return false;
   }
-  // set AK8963 to Power Down
-  writeAK8963Register(AK8963_CNTL1,AK8963_PWR_DOWN);
-  // reset the MPU9250
-  writeRegister(PWR_MGMNT_1,PWR_RESET);
-  // wait for MPU-9250 to come back up
+  /* Set AK8963 to power down */
+  WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
+  /* Reset the MPU9250 */
+  WriteRegister(PWR_MGMNT_1_, H_RESET_);
+  /* Wait for MPU-9250 to come back up */
   delay(1);
-  // reset the AK8963
-  writeAK8963Register(AK8963_CNTL2,AK8963_RESET);
-  // select clock source to gyro
-  if(writeRegister(PWR_MGMNT_1,CLOCK_SEL_PLL) < 0){
-    return -4;
+  /* Reset the AK8963 */
+  WriteAk8963Register(AK8963_CNTL2_, AK8963_RESET_);
+  /* Select clock source to gyro */
+  if (!WriteRegister(PWR_MGMNT_1_, CLKSEL_PLL_)) {
+    return false;
   }
-  // check the WHO AM I byte, expected value is 0x71 (decimal 113) or 0x73 (decimal 115)
-  if((whoAmI() != 113)&&(whoAmI() != 115)){
-    return -5;
+  /* Check the WHO AM I byte */
+  if (!ReadRegisters(WHOAMI_, sizeof(who_am_i_), &who_am_i_)) {
+    return false;
   }
-  // enable accelerometer and gyro
-  if(writeRegister(PWR_MGMNT_2,SEN_ENABLE) < 0){
-    return -6;
+  if ((who_am_i_ != WHOAMI_MPU9250_) && (who_am_i_ != WHOAMI_MPU9255_)) {
+    return false;
   }
-  // setting accel range to 16G as default
-  if(writeRegister(ACCEL_CONFIG,ACCEL_FS_SEL_16G) < 0){
-    return -7;
+  /* Enable I2C master mode */
+  if (!WriteRegister(USER_CTRL_, I2C_MST_EN_)) {
+    return false;
   }
-  _accelScale = G * 16.0f/32767.5f; // setting the accel scale to 16G
-  _accelRange = ACCEL_RANGE_16G;
-  // setting the gyro range to 2000DPS as default
-  if(writeRegister(GYRO_CONFIG,GYRO_FS_SEL_2000DPS) < 0){
-    return -8;
+  /* Set the I2C bus speed to 400 kHz */
+  if (!WriteRegister(I2C_MST_CTRL_, I2C_MST_CLK_)) {
+    return false;
   }
-  _gyroScale = 2000.0f/32767.5f * _d2r; // setting the gyro scale to 2000DPS
-  _gyroRange = GYRO_RANGE_2000DPS;
-  // setting bandwidth to 184Hz as default
-  if(writeRegister(ACCEL_CONFIG2,ACCEL_DLPF_184) < 0){ 
-    return -9;
-  } 
-  if(writeRegister(CONFIG,GYRO_DLPF_184) < 0){ // setting gyro bandwidth to 184Hz
-    return -10;
+  /* Check the AK8963 WHOAMI */
+  if (!ReadAk8963Registers(AK8963_WHOAMI_, sizeof(who_am_i_), &who_am_i_)) {
+    return false;
   }
-  _bandwidth = DLPF_BANDWIDTH_184HZ;
-  // setting the sample rate divider to 0 as default
-  if(writeRegister(SMPDIV,0x00) < 0){ 
-    return -11;
-  } 
-  _srd = 0;
-  // enable I2C master mode
-  if(writeRegister(USER_CTRL,I2C_MST_EN) < 0){
-  	return -12;
+  if (who_am_i_ != WHOAMI_AK8963_) {
+    return false;
   }
-	// set the I2C bus speed to 400 kHz
-	if( writeRegister(I2C_MST_CTRL,I2C_MST_CLK) < 0){
-		return -13;
-	}
-	// check AK8963 WHO AM I register, expected value is 0x48 (decimal 72)
-	if( whoAmIAK8963() != 72 ){
-    return -14;
-	}
-  /* get the magnetometer calibration */
-  // set AK8963 to Power Down
-  if(writeAK8963Register(AK8963_CNTL1,AK8963_PWR_DOWN) < 0){
-    return -15;
+  /* Get the magnetometer calibration */
+  /* Set AK8963 to power down */
+  if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_)) {
+    return false;
   }
-  delay(100); // long wait between AK8963 mode changes
-  // set AK8963 to FUSE ROM access
-  if(writeAK8963Register(AK8963_CNTL1,AK8963_FUSE_ROM) < 0){
-    return -16;
+  delay(100);  // long wait between AK8963 mode changes
+  /* Set AK8963 to FUSE ROM access */
+  if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_FUSE_ROM_)) {
+    return false;
   }
-  delay(100); // long wait between AK8963 mode changes
-  // read the AK8963 ASA registers and compute magnetometer scale factors
-  readAK8963Registers(AK8963_ASA,3,_buffer);
-  _magScaleX = ((((float)_buffer[0]) - 128.0f)/(256.0f) + 1.0f) * 4912.0f / 32760.0f; // micro Tesla
-  _magScaleY = ((((float)_buffer[1]) - 128.0f)/(256.0f) + 1.0f) * 4912.0f / 32760.0f; // micro Tesla
-  _magScaleZ = ((((float)_buffer[2]) - 128.0f)/(256.0f) + 1.0f) * 4912.0f / 32760.0f; // micro Tesla 
-  // set AK8963 to Power Down
-  if(writeAK8963Register(AK8963_CNTL1,AK8963_PWR_DOWN) < 0){
-    return -17;
+  delay(100);  // long wait between AK8963 mode changes
+  /* Read the AK8963 ASA registers and compute magnetometer scale factors */
+  if (!ReadAk8963Registers(AK8963_ASA_, sizeof(asa_buff_), asa_buff_)) {
+    return false;
   }
-  delay(100); // long wait between AK8963 mode changes  
-  // set AK8963 to 16 bit resolution, 100 Hz update rate
-  if(writeAK8963Register(AK8963_CNTL1,AK8963_CNT_MEAS2) < 0){
-    return -18;
+  mag_scale_[0] = ((static_cast<float>(asa_buff_[0]) - 128.0f)
+    / 256.0f + 1.0f) * 4912.0f / 32760.0f;
+  mag_scale_[1] = ((static_cast<float>(asa_buff_[1]) - 128.0f)
+    / 256.0f + 1.0f) * 4912.0f / 32760.0f;
+  mag_scale_[2] = ((static_cast<float>(asa_buff_[2]) - 128.0f)
+    / 256.0f + 1.0f) * 4912.0f / 32760.0f;
+  /* Set AK8963 to power down */
+  if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_)) {
+    return false;
   }
-  delay(100); // long wait between AK8963 mode changes
-  // select clock source to gyro
-  if(writeRegister(PWR_MGMNT_1,CLOCK_SEL_PLL) < 0){
-    return -19;
-  }       
-  // instruct the MPU9250 to get 7 bytes of data from the AK8963 at the sample rate
-  readAK8963Registers(AK8963_HXL,7,_buffer);
-  // estimate gyro bias
-  if (calibrateGyro() < 0) {
-    return -20;
+  /* Set AK8963 to 16 bit resolution, 100 Hz update rate */
+  if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_CNT_MEAS2_)) {
+    return false;
   }
-  // successful init, return 1
-  return 1;
+  delay(100);  // long wait between AK8963 mode changes
+  /* Select clock source to gyro */
+  if (!WriteRegister(PWR_MGMNT_1_, CLKSEL_PLL_)) {
+    return false;
+  }
+  /* Set the accel range to 16G by default */
+  if (!ConfigAccelRange(ACCEL_RANGE_16G)) {
+    return false;
+  }
+  /* Set the gyro range to 2000DPS by default*/
+  if (!ConfigGyroRange(GYRO_RANGE_2000DPS)) {
+    return false;
+  }
+  /* Set the DLPF to 184HZ by default */
+  if (!ConfigDlpfBandwidth(DLPF_BANDWIDTH_184HZ)) {
+    return false;
+  }
+  /* Set the SRD to 0 by default */
+  if (!ConfigSrd(0)) {
+    return false;
+  }
+  return true;
 }
-
-/* sets the accelerometer full scale range to values other than default */
-int MPU9250::setAccelRange(AccelRange range) {
-  // use low speed SPI for register setting
-  _useSPIHS = false;
-  switch(range) {
+bool Mpu9250::EnableDrdyInt() {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  if (!WriteRegister(INT_PIN_CFG_, INT_PULSE_50US_)) {
+    return false;
+  }
+  if (!WriteRegister(INT_ENABLE_, INT_RAW_RDY_EN_)) {
+    return false;
+  }
+  return true;
+}
+bool Mpu9250::DisableDrdyInt() {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  if (!WriteRegister(INT_ENABLE_, INT_DISABLE_)) {
+    return false;
+  }
+  return true;
+}
+bool Mpu9250::ConfigAccelRange(const AccelRange range) {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  /* Check input is valid and set requested range and scale */
+  switch (range) {
     case ACCEL_RANGE_2G: {
-      // setting the accel range to 2G
-      if(writeRegister(ACCEL_CONFIG,ACCEL_FS_SEL_2G) < 0){
-        return -1;
-      }
-      _accelScale = G * 2.0f/32767.5f; // setting the accel scale to 2G
-      break; 
+      requested_accel_range_ = range;
+      requested_accel_scale_ = 2.0f / 32767.5f;
+      break;
     }
     case ACCEL_RANGE_4G: {
-      // setting the accel range to 4G
-      if(writeRegister(ACCEL_CONFIG,ACCEL_FS_SEL_4G) < 0){
-        return -1;
-      }
-      _accelScale = G * 4.0f/32767.5f; // setting the accel scale to 4G
+      requested_accel_range_ = range;
+      requested_accel_scale_ = 4.0f / 32767.5f;
       break;
     }
     case ACCEL_RANGE_8G: {
-      // setting the accel range to 8G
-      if(writeRegister(ACCEL_CONFIG,ACCEL_FS_SEL_8G) < 0){
-        return -1;
-      }
-      _accelScale = G * 8.0f/32767.5f; // setting the accel scale to 8G
+      requested_accel_range_ = range;
+      requested_accel_scale_ = 8.0f / 32767.5f;
       break;
     }
     case ACCEL_RANGE_16G: {
-      // setting the accel range to 16G
-      if(writeRegister(ACCEL_CONFIG,ACCEL_FS_SEL_16G) < 0){
-        return -1;
-      }
-      _accelScale = G * 16.0f/32767.5f; // setting the accel scale to 16G
+      requested_accel_range_ = range;
+      requested_accel_scale_ = 16.0f / 32767.5f;
       break;
     }
+    default: {
+      return false;
+    }
   }
-  _accelRange = range;
-  return 1;
+  /* Try setting the requested range */
+  if (!WriteRegister(ACCEL_CONFIG_, requested_accel_range_)) {
+    return false;
+  }
+  /* Update stored range and scale */
+  accel_range_ = requested_accel_range_;
+  accel_scale_ = requested_accel_scale_;
+  return true;
 }
-
-/* sets the gyro full scale range to values other than default */
-int MPU9250::setGyroRange(GyroRange range) {
-  // use low speed SPI for register setting
-  _useSPIHS = false;
-  switch(range) {
+bool Mpu9250::ConfigGyroRange(const GyroRange range) {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  /* Check input is valid and set requested range and scale */
+  switch (range) {
     case GYRO_RANGE_250DPS: {
-      // setting the gyro range to 250DPS
-      if(writeRegister(GYRO_CONFIG,GYRO_FS_SEL_250DPS) < 0){
-        return -1;
-      }
-      _gyroScale = 250.0f/32767.5f * _d2r; // setting the gyro scale to 250DPS
+      requested_gyro_range_ = range;
+      requested_gyro_scale_ = 250.0f / 32767.5f;
       break;
     }
     case GYRO_RANGE_500DPS: {
-      // setting the gyro range to 500DPS
-      if(writeRegister(GYRO_CONFIG,GYRO_FS_SEL_500DPS) < 0){
-        return -1;
-      }
-      _gyroScale = 500.0f/32767.5f * _d2r; // setting the gyro scale to 500DPS
-      break;  
+      requested_gyro_range_ = range;
+      requested_gyro_scale_ = 500.0f / 32767.5f;
+      break;
     }
     case GYRO_RANGE_1000DPS: {
-      // setting the gyro range to 1000DPS
-      if(writeRegister(GYRO_CONFIG,GYRO_FS_SEL_1000DPS) < 0){
-        return -1;
-      }
-      _gyroScale = 1000.0f/32767.5f * _d2r; // setting the gyro scale to 1000DPS
+      requested_gyro_range_ = range;
+      requested_gyro_scale_ = 1000.0f / 32767.5f;
       break;
     }
     case GYRO_RANGE_2000DPS: {
-      // setting the gyro range to 2000DPS
-      if(writeRegister(GYRO_CONFIG,GYRO_FS_SEL_2000DPS) < 0){
-        return -1;
-      }
-      _gyroScale = 2000.0f/32767.5f * _d2r; // setting the gyro scale to 2000DPS
+      requested_gyro_range_ = range;
+      requested_gyro_scale_ = 2000.0f / 32767.5f;
       break;
     }
+    default: {
+      return false;
+    }
   }
-  _gyroRange = range;
-  return 1;
+  /* Try setting the requested range */
+  if (!WriteRegister(GYRO_CONFIG_, requested_gyro_range_)) {
+    return false;
+  }
+  /* Update stored range and scale */
+  gyro_range_ = requested_gyro_range_;
+  gyro_scale_ = requested_gyro_scale_;
+  return true;
 }
-
-/* sets the DLPF bandwidth to values other than default */
-int MPU9250::setDlpfBandwidth(DlpfBandwidth bandwidth) {
-  // use low speed SPI for register setting
-  _useSPIHS = false;
-  switch(bandwidth) {
+bool Mpu9250::ConfigSrd(const uint8_t srd) {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  /* Changing the SRD to allow us to set the magnetometer successfully */
+  if (!WriteRegister(SMPLRT_DIV_, 19)) {
+    return false;
+  }
+  /* Set the magnetometer sample rate */
+  if (srd > 9) {
+    /* Set AK8963 to power down */
+    WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
+    delay(100);  // long wait between AK8963 mode changes
+    /* Set AK8963 to 16 bit resolution, 8 Hz update rate */
+    if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_CNT_MEAS1_)) {
+      return false;
+    }
+    delay(100);  // long wait between AK8963 mode changes
+    if (!ReadAk8963Registers(AK8963_ST1_, sizeof(mag_data_), mag_data_)) {
+      return false;
+    }
+  } else {
+    /* Set AK8963 to power down */
+    WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
+    delay(100);  // long wait between AK8963 mode changes
+    /* Set AK8963 to 16 bit resolution, 100 Hz update rate */
+    if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_CNT_MEAS2_)) {
+      return false;
+    }
+    delay(100);  // long wait between AK8963 mode changes
+    if (!ReadAk8963Registers(AK8963_ST1_, sizeof(mag_data_), mag_data_)) {
+      return false;
+    }
+  }
+  /* Set the IMU sample rate */
+  if (!WriteRegister(SMPLRT_DIV_, srd)) {
+    return false;
+  }
+  srd_ = srd;
+  return true;
+}
+bool Mpu9250::ConfigDlpfBandwidth(const DlpfBandwidth dlpf) {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  /* Check input is valid and set requested dlpf */
+  switch (dlpf) {
     case DLPF_BANDWIDTH_184HZ: {
-      if(writeRegister(ACCEL_CONFIG2,ACCEL_DLPF_184) < 0){ // setting accel bandwidth to 184Hz
-        return -1;
-      } 
-      if(writeRegister(CONFIG,GYRO_DLPF_184) < 0){ // setting gyro bandwidth to 184Hz
-        return -2;
-      }
+      requested_dlpf_ = dlpf;
       break;
     }
     case DLPF_BANDWIDTH_92HZ: {
-      if(writeRegister(ACCEL_CONFIG2,ACCEL_DLPF_92) < 0){ // setting accel bandwidth to 92Hz
-        return -1;
-      } 
-      if(writeRegister(CONFIG,GYRO_DLPF_92) < 0){ // setting gyro bandwidth to 92Hz
-        return -2;
-      }
+      requested_dlpf_ = dlpf;
       break;
     }
     case DLPF_BANDWIDTH_41HZ: {
-      if(writeRegister(ACCEL_CONFIG2,ACCEL_DLPF_41) < 0){ // setting accel bandwidth to 41Hz
-        return -1;
-      } 
-      if(writeRegister(CONFIG,GYRO_DLPF_41) < 0){ // setting gyro bandwidth to 41Hz
-        return -2;
-      }
+      requested_dlpf_ = dlpf;
       break;
     }
     case DLPF_BANDWIDTH_20HZ: {
-      if(writeRegister(ACCEL_CONFIG2,ACCEL_DLPF_20) < 0){ // setting accel bandwidth to 20Hz
-        return -1;
-      } 
-      if(writeRegister(CONFIG,GYRO_DLPF_20) < 0){ // setting gyro bandwidth to 20Hz
-        return -2;
-      }
+      requested_dlpf_ = dlpf;
       break;
     }
     case DLPF_BANDWIDTH_10HZ: {
-      if(writeRegister(ACCEL_CONFIG2,ACCEL_DLPF_10) < 0){ // setting accel bandwidth to 10Hz
-        return -1;
-      } 
-      if(writeRegister(CONFIG,GYRO_DLPF_10) < 0){ // setting gyro bandwidth to 10Hz
-        return -2;
-      }
+      requested_dlpf_ = dlpf;
       break;
     }
     case DLPF_BANDWIDTH_5HZ: {
-      if(writeRegister(ACCEL_CONFIG2,ACCEL_DLPF_5) < 0){ // setting accel bandwidth to 5Hz
-        return -1;
-      } 
-      if(writeRegister(CONFIG,GYRO_DLPF_5) < 0){ // setting gyro bandwidth to 5Hz
-        return -2;
-      }
+      requested_dlpf_ = dlpf;
       break;
     }
+    default: {
+      return false;
+    }
   }
-  _bandwidth = bandwidth;
-  return 1;
-}
-
-/* sets the sample rate divider to values other than default */
-int MPU9250::setSrd(uint8_t srd) {
-  // use low speed SPI for register setting
-  _useSPIHS = false;
-  /* setting the sample rate divider to 19 to facilitate setting up magnetometer */
-  if(writeRegister(SMPDIV,19) < 0){ // setting the sample rate divider
-    return -1;
+  /* Try setting the dlpf */
+  if (!WriteRegister(ACCEL_CONFIG2_, requested_dlpf_)) {
+    return false;
   }
-  if(srd > 9){
-    // set AK8963 to Power Down
-    if(writeAK8963Register(AK8963_CNTL1,AK8963_PWR_DOWN) < 0){
-      return -2;
-    }
-    delay(100); // long wait between AK8963 mode changes  
-    // set AK8963 to 16 bit resolution, 8 Hz update rate
-    if(writeAK8963Register(AK8963_CNTL1,AK8963_CNT_MEAS1) < 0){
-      return -3;
-    }
-    delay(100); // long wait between AK8963 mode changes     
-    // instruct the MPU9250 to get 7 bytes of data from the AK8963 at the sample rate
-    readAK8963Registers(AK8963_HXL,7,_buffer);
-  } else {
-    // set AK8963 to Power Down
-    if(writeAK8963Register(AK8963_CNTL1,AK8963_PWR_DOWN) < 0){
-      return -2;
-    }
-    delay(100); // long wait between AK8963 mode changes  
-    // set AK8963 to 16 bit resolution, 100 Hz update rate
-    if(writeAK8963Register(AK8963_CNTL1,AK8963_CNT_MEAS2) < 0){
-      return -3;
-    }
-    delay(100); // long wait between AK8963 mode changes     
-    // instruct the MPU9250 to get 7 bytes of data from the AK8963 at the sample rate
-    readAK8963Registers(AK8963_HXL,7,_buffer);    
-  } 
-  /* setting the sample rate divider */
-  if(writeRegister(SMPDIV,srd) < 0){ // setting the sample rate divider
-    return -4;
-  } 
-  _srd = srd;
-  return 1; 
-}
-
-/* enables the data ready interrupt */
-int MPU9250::enableDataReadyInterrupt() {
-  // use low speed SPI for register setting
-  _useSPIHS = false;
-  /* setting the interrupt */
-  if (writeRegister(INT_PIN_CFG,INT_PULSE_50US) < 0){ // setup interrupt, 50 us pulse
-    return -1;
-  }  
-  if (writeRegister(INT_ENABLE,INT_RAW_RDY_EN) < 0){ // set to data ready
-    return -2;
+  if (!WriteRegister(CONFIG_, requested_dlpf_)) {
+    return false;
   }
-  return 1;
+  /* Update stored dlpf */
+  dlpf_bandwidth_ = requested_dlpf_;
+  return true;
 }
-
-/* disables the data ready interrupt */
-int MPU9250::disableDataReadyInterrupt() {
-  // use low speed SPI for register setting
-  _useSPIHS = false;
-  if(writeRegister(INT_ENABLE,INT_DISABLE) < 0){ // disable interrupt
-    return -1;
-  }  
-  return 1;
-}
-
-/* configures and enables wake on motion, low power mode */
-int MPU9250::enableWakeOnMotion(float womThresh_mg,LpAccelOdr odr) {
-  // use low speed SPI for register setting
-  _useSPIHS = false;
-  // set AK8963 to Power Down
-  writeAK8963Register(AK8963_CNTL1,AK8963_PWR_DOWN);
-  // reset the MPU9250
-  writeRegister(PWR_MGMNT_1,PWR_RESET);
-  // wait for MPU-9250 to come back up
+bool Mpu9250::EnableWom(int16_t threshold_mg, const WomRate wom_rate) {
+  /* Check threshold in limits, 4 - 1020 mg */
+  if ((threshold_mg < 4) || (threshold_mg > 1020)) {return false;}
+  spi_clock_ = SPI_CFG_CLOCK_;
+  /* Set AK8963 to power down */
+  WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
+  /* Reset the MPU9250 */
+  WriteRegister(PWR_MGMNT_1_, H_RESET_);
+  /* Wait for MPU-9250 to come back up */
   delay(1);
-  if(writeRegister(PWR_MGMNT_1,0x00) < 0){ // cycle 0, sleep 0, standby 0
+  /* Cycle 0, Sleep 0, Standby 0, Internal Clock */
+  if (!WriteRegister(PWR_MGMNT_1_, 0x00)) {
+    return false;
+  }
+  /* Disable gyro measurements */
+  if (!WriteRegister(PWR_MGMNT_2_, DISABLE_GYRO_)) {
+    return false;
+  }
+  /* Set accel bandwidth to 184 Hz */
+  if (!WriteRegister(ACCEL_CONFIG2_, DLPF_BANDWIDTH_184HZ)) {
+    return false;
+  }
+  /* Set interrupt to wake on motion */
+  if (!WriteRegister(INT_ENABLE_, INT_WOM_EN_)) {
+    return false;
+  }
+  /* Enable accel hardware intelligence */
+  if (!WriteRegister(MOT_DETECT_CTRL_, (ACCEL_INTEL_EN_ | ACCEL_INTEL_MODE_))) {
+    return false;
+  }
+  /* Set the wake on motion threshold, LSB is 4 mg */
+  uint8_t wom_threshold = static_cast<uint8_t>(threshold_mg /
+                                               static_cast<int8_t>(4));
+  if (!WriteRegister(WOM_THR_, wom_threshold)) {
+    return false;
+  }
+  /* Set the accel wakeup frequency */
+  if (!WriteRegister(LP_ACCEL_ODR_, wom_rate)) {
+    return false;
+  }
+  /* Switch to low power mode */
+  if (!WriteRegister(PWR_MGMNT_1_, PWR_CYCLE_WOM_)) {
+    return false;
+  }
+  return true;
+}
+#if !defined(DISABLE_MPU9250_FIFO)
+bool Mpu9250::EnableFifo() {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  /* Enable the FIFO subsystem */
+  if (!WriteRegister(USER_CTRL_, FIFO_EN_CTRL_ | I2C_MST_EN_)) {
+    return false;
+  }
+  /* Set the accel and gyro to write to the FIFO */
+  if (!WriteRegister(FIFO_EN_, FIFO_ACCEL_ | FIFO_GYRO_)) {
+    return false;
+  }
+  return true;
+}
+bool Mpu9250::DisableFifo() {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  /* Stop writing to the FIFO */
+  if (!WriteRegister(FIFO_EN_, 0x00)) {
+    return false;
+  }
+  /* Disable the FIFO subsystem */
+  WriteRegister(USER_CTRL_, FIFO_RESET_ | I2C_MST_EN_);
+  return true;
+}
+#endif
+void Mpu9250::Reset() {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  /* Set AK8963 to power down */
+  WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
+  /* Reset the MPU9250 */
+  WriteRegister(PWR_MGMNT_1_, H_RESET_);
+  /* Wait for MPU-9250 to come back up */
+  delay(1);
+}
+bool Mpu9250::Read() {
+  spi_clock_ = SPI_READ_CLOCK_;
+  /* Reset the new data flags */
+  new_mag_data_ = false;
+  new_imu_data_ = false;
+  /* Read the data registers */
+  if (!ReadRegisters(INT_STATUS_, sizeof(data_buf_), data_buf_)) {
+    return false;
+  }
+  /* Check if the FIFO overflowed */
+  fifo_overflow_ = (data_buf_[0] & FIFO_OVERFLOW_INT_);
+  /* Check if data is ready */
+  new_imu_data_ = (data_buf_[0] & RAW_DATA_RDY_INT_);
+  if (!new_imu_data_) {
+    return false;
+  }
+  /* Unpack the buffer */
+  accel_cnts_[0] = static_cast<int16_t>(data_buf_[1])  << 8 | data_buf_[2];
+  accel_cnts_[1] = static_cast<int16_t>(data_buf_[3])  << 8 | data_buf_[4];
+  accel_cnts_[2] = static_cast<int16_t>(data_buf_[5])  << 8 | data_buf_[6];
+  temp_cnts_ =     static_cast<int16_t>(data_buf_[7])  << 8 | data_buf_[8];
+  gyro_cnts_[0] =  static_cast<int16_t>(data_buf_[9])  << 8 | data_buf_[10];
+  gyro_cnts_[1] =  static_cast<int16_t>(data_buf_[11]) << 8 | data_buf_[12];
+  gyro_cnts_[2] =  static_cast<int16_t>(data_buf_[13]) << 8 | data_buf_[14];
+  new_mag_data_ = (data_buf_[15] & AK8963_DATA_RDY_INT_);
+  mag_cnts_[0] =   static_cast<int16_t>(data_buf_[17]) << 8 | data_buf_[16];
+  mag_cnts_[1] =   static_cast<int16_t>(data_buf_[19]) << 8 | data_buf_[18];
+  mag_cnts_[2] =   static_cast<int16_t>(data_buf_[21]) << 8 | data_buf_[20];
+  /* Check for mag overflow */
+  mag_sensor_overflow_ = (data_buf_[22] & AK8963_HOFL_);
+  if (mag_sensor_overflow_) {
+    new_mag_data_ = false;
+  }
+  /* Convert to float values and rotate the accel / gyro axis */
+  accel_[0] = convacc(static_cast<float>(accel_cnts_[1]) * accel_scale_,
+                      LinAccUnit::G, LinAccUnit::MPS2);
+  accel_[1] = convacc(static_cast<float>(accel_cnts_[0]) * accel_scale_,
+                      LinAccUnit::G, LinAccUnit::MPS2);
+  accel_[2] = convacc(static_cast<float>(accel_cnts_[2]) * accel_scale_ * -1.0f,
+                      LinAccUnit::G, LinAccUnit::MPS2);
+  temp_ = (static_cast<float>(temp_cnts_) - 21.0f) / TEMP_SCALE_ + 21.0f;
+  gyro_[0] = deg2rad(static_cast<float>(gyro_cnts_[1]) * gyro_scale_);
+  gyro_[1] = deg2rad(static_cast<float>(gyro_cnts_[0]) * gyro_scale_);
+  gyro_[2] = deg2rad(static_cast<float>(gyro_cnts_[2]) * gyro_scale_ * -1.0f);
+  /* Only update on new data */
+  if (new_mag_data_) {
+    mag_[0] =   static_cast<float>(mag_cnts_[0]) * mag_scale_[0];
+    mag_[1] =   static_cast<float>(mag_cnts_[1]) * mag_scale_[1];
+    mag_[2] =   static_cast<float>(mag_cnts_[2]) * mag_scale_[2];
+  }
+  return true;
+}
+#if !defined(DISABLE_MPU9250_FIFO)
+int8_t Mpu9250::ReadFifo() {
+  spi_clock_ = SPI_READ_CLOCK_;
+  /* Get the FIFO size, bytes */
+  if (!ReadRegisters(FIFO_COUNT_, 2, data_buf_)) {
     return -1;
-  } 
-  if(writeRegister(PWR_MGMNT_2,DIS_GYRO) < 0){ // disable gyro measurements
-    return -2;
-  } 
-  if(writeRegister(ACCEL_CONFIG2,ACCEL_DLPF_184) < 0){ // setting accel bandwidth to 184Hz
-    return -3;
-  } 
-  if(writeRegister(INT_ENABLE,INT_WOM_EN) < 0){ // enabling interrupt to wake on motion
-    return -4;
-  } 
-  if(writeRegister(MOT_DETECT_CTRL,(ACCEL_INTEL_EN | ACCEL_INTEL_MODE)) < 0){ // enabling accel hardware intelligence
-    return -5;
-  } 
-  _womThreshold = map(womThresh_mg, 0, 1020, 0, 255);
-  if(writeRegister(WOM_THR,_womThreshold) < 0){ // setting wake on motion threshold
-    return -6;
   }
-  if(writeRegister(LP_ACCEL_ODR,(uint8_t)odr) < 0){ // set frequency of wakeup
-    return -7;
-  }
-  if(writeRegister(PWR_MGMNT_1,PWR_CYCLE) < 0){ // switch to accel low power mode
-    return -8;
-  }
-  return 1;
-}
-
-/* configures and enables the FIFO buffer  */
-int MPU9250FIFO::enableFifo(bool accel,bool gyro,bool mag,bool temp) {
-  // use low speed SPI for register setting
-  _useSPIHS = false;
-  if(writeRegister(USER_CTRL, (0x40 | I2C_MST_EN)) < 0){
-    return -1;
-  }
-  if(writeRegister(FIFO_EN,(accel*FIFO_ACCEL)|(gyro*FIFO_GYRO)|(mag*FIFO_MAG)|(temp*FIFO_TEMP)) < 0){
-    return -2;
-  }
-  _enFifoAccel = accel;
-  _enFifoGyro = gyro;
-  _enFifoMag = mag;
-  _enFifoTemp = temp;
-  _fifoFrameSize = accel*6 + gyro*6 + mag*7 + temp*2;
-  return 1;
-}
-
-/* reads the most current data from MPU9250 and stores in buffer */
-int MPU9250::readSensor() {
-  _useSPIHS = true; // use the high speed SPI for data readout
-  // grab the data from the MPU9250
-  if (readRegisters(ACCEL_OUT, 21, _buffer) < 0) {
-    return -1;
-  }
-  // combine into 16 bit values
-  _axcounts = (((int16_t)_buffer[0]) << 8) | _buffer[1];  
-  _aycounts = (((int16_t)_buffer[2]) << 8) | _buffer[3];
-  _azcounts = (((int16_t)_buffer[4]) << 8) | _buffer[5];
-  _tcounts = (((int16_t)_buffer[6]) << 8) | _buffer[7];
-  _gxcounts = (((int16_t)_buffer[8]) << 8) | _buffer[9];
-  _gycounts = (((int16_t)_buffer[10]) << 8) | _buffer[11];
-  _gzcounts = (((int16_t)_buffer[12]) << 8) | _buffer[13];
-  _hxcounts = (((int16_t)_buffer[15]) << 8) | _buffer[14];
-  _hycounts = (((int16_t)_buffer[17]) << 8) | _buffer[16];
-  _hzcounts = (((int16_t)_buffer[19]) << 8) | _buffer[18];
-  // transform and convert to float values
-  _ax = (((float)(tX[0]*_axcounts + tX[1]*_aycounts + tX[2]*_azcounts) * _accelScale) - _axb)*_axs;
-  _ay = (((float)(tY[0]*_axcounts + tY[1]*_aycounts + tY[2]*_azcounts) * _accelScale) - _ayb)*_ays;
-  _az = (((float)(tZ[0]*_axcounts + tZ[1]*_aycounts + tZ[2]*_azcounts) * _accelScale) - _azb)*_azs;
-  _gx = ((float)(tX[0]*_gxcounts + tX[1]*_gycounts + tX[2]*_gzcounts) * _gyroScale) - _gxb;
-  _gy = ((float)(tY[0]*_gxcounts + tY[1]*_gycounts + tY[2]*_gzcounts) * _gyroScale) - _gyb;
-  _gz = ((float)(tZ[0]*_gxcounts + tZ[1]*_gycounts + tZ[2]*_gzcounts) * _gyroScale) - _gzb;
-  _hx = (((float)(_hxcounts) * _magScaleX) - _hxb)*_hxs;
-  _hy = (((float)(_hycounts) * _magScaleY) - _hyb)*_hys;
-  _hz = (((float)(_hzcounts) * _magScaleZ) - _hzb)*_hzs;
-  _t = ((((float) _tcounts) - _tempOffset)/_tempScale) + _tempOffset;
-  return 1;
-}
-
-/* returns the accelerometer measurement in the x direction, m/s/s */
-float MPU9250::getAccelX_mss() {
-  return _ax;
-}
-
-/* returns the accelerometer measurement in the y direction, m/s/s */
-float MPU9250::getAccelY_mss() {
-  return _ay;
-}
-
-/* returns the accelerometer measurement in the z direction, m/s/s */
-float MPU9250::getAccelZ_mss() {
-  return _az;
-}
-
-/* returns the gyroscope measurement in the x direction, rad/s */
-float MPU9250::getGyroX_rads() {
-  return _gx;
-}
-
-/* returns the gyroscope measurement in the y direction, rad/s */
-float MPU9250::getGyroY_rads() {
-  return _gy;
-}
-
-/* returns the gyroscope measurement in the z direction, rad/s */
-float MPU9250::getGyroZ_rads() {
-  return _gz;
-}
-
-/* returns the magnetometer measurement in the x direction, uT */
-float MPU9250::getMagX_uT() {
-  return _hx;
-}
-
-/* returns the magnetometer measurement in the y direction, uT */
-float MPU9250::getMagY_uT() {
-  return _hy;
-}
-
-/* returns the magnetometer measurement in the z direction, uT */
-float MPU9250::getMagZ_uT() {
-  return _hz;
-}
-
-/* returns the die temperature, C */
-float MPU9250::getTemperature_C() {
-  return _t;
-}
-
-/* reads data from the MPU9250 FIFO and stores in buffer */
-int MPU9250FIFO::readFifo() {
-  _useSPIHS = true; // use the high speed SPI for data readout
-  // get the fifo size
-  readRegisters(FIFO_COUNT, 2, _buffer);
-  _fifoSize = (((uint16_t) (_buffer[0]&0x0F)) <<8) + (((uint16_t) _buffer[1]));
-  // read and parse the buffer
-  for (size_t i=0; i < _fifoSize/_fifoFrameSize; i++) {
-    // grab the data from the MPU9250
-    if (readRegisters(FIFO_READ,_fifoFrameSize,_buffer) < 0) {
+  fifo_bytes_ = static_cast<int16_t>(data_buf_[0] & 0x0F) << 8 | data_buf_[1];
+  /* Number of data frames available */
+  fifo_num_frames_ = fifo_bytes_ / FIFO_FRAME_SIZE_;
+  /* Read and store each frame */
+  int8_t frames_to_read = std::min(fifo_num_frames_, FIFO_MAX_NUM_FRAMES_);
+  for (int8_t i = 0; i < frames_to_read; i++) {
+    if (!ReadRegisters(FIFO_READ_, FIFO_FRAME_SIZE_, data_buf_)) {
       return -1;
     }
-    if (_enFifoAccel) {
-      // combine into 16 bit values
-      _axcounts = (((int16_t)_buffer[0]) << 8) | _buffer[1];  
-      _aycounts = (((int16_t)_buffer[2]) << 8) | _buffer[3];
-      _azcounts = (((int16_t)_buffer[4]) << 8) | _buffer[5];
-      // transform and convert to float values
-      _axFifo[i] = (((float)(tX[0]*_axcounts + tX[1]*_aycounts + tX[2]*_azcounts) * _accelScale)-_axb)*_axs;
-      _ayFifo[i] = (((float)(tY[0]*_axcounts + tY[1]*_aycounts + tY[2]*_azcounts) * _accelScale)-_ayb)*_ays;
-      _azFifo[i] = (((float)(tZ[0]*_axcounts + tZ[1]*_aycounts + tZ[2]*_azcounts) * _accelScale)-_azb)*_azs;
-      _aSize = _fifoSize/_fifoFrameSize;
-    }
-    if (_enFifoTemp) {
-      // combine into 16 bit values
-      _tcounts = (((int16_t)_buffer[0 + _enFifoAccel*6]) << 8) | _buffer[1 + _enFifoAccel*6];
-      // transform and convert to float values
-      _tFifo[i] = ((((float) _tcounts) - _tempOffset)/_tempScale) + _tempOffset;
-      _tSize = _fifoSize/_fifoFrameSize;
-    }
-    if (_enFifoGyro) {
-      // combine into 16 bit values
-      _gxcounts = (((int16_t)_buffer[0 + _enFifoAccel*6 + _enFifoTemp*2]) << 8) | _buffer[1 + _enFifoAccel*6 + _enFifoTemp*2];
-      _gycounts = (((int16_t)_buffer[2 + _enFifoAccel*6 + _enFifoTemp*2]) << 8) | _buffer[3 + _enFifoAccel*6 + _enFifoTemp*2];
-      _gzcounts = (((int16_t)_buffer[4 + _enFifoAccel*6 + _enFifoTemp*2]) << 8) | _buffer[5 + _enFifoAccel*6 + _enFifoTemp*2];
-      // transform and convert to float values
-      _gxFifo[i] = ((float)(tX[0]*_gxcounts + tX[1]*_gycounts + tX[2]*_gzcounts) * _gyroScale) - _gxb;
-      _gyFifo[i] = ((float)(tY[0]*_gxcounts + tY[1]*_gycounts + tY[2]*_gzcounts) * _gyroScale) - _gyb;
-      _gzFifo[i] = ((float)(tZ[0]*_gxcounts + tZ[1]*_gycounts + tZ[2]*_gzcounts) * _gyroScale) - _gzb;
-      _gSize = _fifoSize/_fifoFrameSize;
-    }
-    if (_enFifoMag) {
-      // combine into 16 bit values
-      _hxcounts = (((int16_t)_buffer[1 + _enFifoAccel*6 + _enFifoTemp*2 + _enFifoGyro*6]) << 8) | _buffer[0 + _enFifoAccel*6 + _enFifoTemp*2 + _enFifoGyro*6];
-      _hycounts = (((int16_t)_buffer[3 + _enFifoAccel*6 + _enFifoTemp*2 + _enFifoGyro*6]) << 8) | _buffer[2 + _enFifoAccel*6 + _enFifoTemp*2 + _enFifoGyro*6];
-      _hzcounts = (((int16_t)_buffer[5 + _enFifoAccel*6 + _enFifoTemp*2 + _enFifoGyro*6]) << 8) | _buffer[4 + _enFifoAccel*6 + _enFifoTemp*2 + _enFifoGyro*6];
-      // transform and convert to float values
-      _hxFifo[i] = (((float)(_hxcounts) * _magScaleX) - _hxb)*_hxs;
-      _hyFifo[i] = (((float)(_hycounts) * _magScaleY) - _hyb)*_hys;
-      _hzFifo[i] = (((float)(_hzcounts) * _magScaleZ) - _hzb)*_hzs;
-      _hSize = _fifoSize/_fifoFrameSize;
-    }
+    /* Unpack the buffer */
+    accel_cnts_[0] = static_cast<int16_t>(data_buf_[0])  << 8 | data_buf_[1];
+    accel_cnts_[1] = static_cast<int16_t>(data_buf_[2])  << 8 | data_buf_[3];
+    accel_cnts_[2] = static_cast<int16_t>(data_buf_[4])  << 8 | data_buf_[5];
+    gyro_cnts_[0] =  static_cast<int16_t>(data_buf_[6])  << 8 | data_buf_[7];
+    gyro_cnts_[1] =  static_cast<int16_t>(data_buf_[8]) << 8 | data_buf_[9];
+    gyro_cnts_[2] =  static_cast<int16_t>(data_buf_[10]) << 8 | data_buf_[11];
+    /* Convert to float values and rotate the accel / gyro axis */
+    fifo_ax_[i] = convacc(static_cast<float>(accel_cnts_[1]) * accel_scale_,
+                          LinAccUnit::G, LinAccUnit::MPS2);
+    fifo_ay_[i] = convacc(static_cast<float>(accel_cnts_[0]) * accel_scale_,
+                          LinAccUnit::G, LinAccUnit::MPS2);
+    fifo_az_[i] = convacc(static_cast<float>(accel_cnts_[2]) * accel_scale_ *
+                          -1.0f, LinAccUnit::G, LinAccUnit::MPS2);
+    fifo_gx_[i] = deg2rad(static_cast<float>(gyro_cnts_[1]) * gyro_scale_);
+    fifo_gy_[i] = deg2rad(static_cast<float>(gyro_cnts_[0]) * gyro_scale_);
+    fifo_gz_[i] = deg2rad(static_cast<float>(gyro_cnts_[2]) * gyro_scale_ *
+                          -1.0f);
   }
-  return 1;
+  return fifo_num_frames_;
 }
-
-/* returns the accelerometer FIFO size and data in the x direction, m/s/s */
-void MPU9250FIFO::getFifoAccelX_mss(size_t *size,float* data) {
-  *size = _aSize;
-  memcpy(data,_axFifo,_aSize*sizeof(float));
+int8_t Mpu9250::fifo_accel_x_mps2(float * data, const std::size_t len) {
+  if (!data) {return -1;}
+  int8_t cpy_len = std::min(fifo_num_frames_, static_cast<int8_t>(len));
+  memcpy(data, fifo_ax_, cpy_len * sizeof(float));
+  return cpy_len;
 }
-
-/* returns the accelerometer FIFO size and data in the y direction, m/s/s */
-void MPU9250FIFO::getFifoAccelY_mss(size_t *size,float* data) {
-  *size = _aSize;
-  memcpy(data,_ayFifo,_aSize*sizeof(float));
+int8_t Mpu9250::fifo_accel_y_mps2(float * data, const std::size_t len) {
+  if (!data) {return -1;}
+  int8_t cpy_len = std::min(fifo_num_frames_, static_cast<int8_t>(len));
+  memcpy(data, fifo_ay_, cpy_len * sizeof(float));
+  return cpy_len;
 }
-
-/* returns the accelerometer FIFO size and data in the z direction, m/s/s */
-void MPU9250FIFO::getFifoAccelZ_mss(size_t *size,float* data) {
-  *size = _aSize;
-  memcpy(data,_azFifo,_aSize*sizeof(float));
+int8_t Mpu9250::fifo_accel_z_mps2(float * data, const std::size_t len) {
+  if (!data) {return -1;}
+  int8_t cpy_len = std::min(fifo_num_frames_, static_cast<int8_t>(len));
+  memcpy(data, fifo_az_, cpy_len * sizeof(float));
+  return cpy_len;
 }
-
-/* returns the gyroscope FIFO size and data in the x direction, rad/s */
-void MPU9250FIFO::getFifoGyroX_rads(size_t *size,float* data) {
-  *size = _gSize;
-  memcpy(data,_gxFifo,_gSize*sizeof(float));
+int8_t Mpu9250::fifo_gyro_x_radps(float * data, const std::size_t len) {
+  if (!data) {return -1;}
+  int8_t cpy_len = std::min(fifo_num_frames_, static_cast<int8_t>(len));
+  memcpy(data, fifo_gx_, cpy_len * sizeof(float));
+  return cpy_len;
 }
-
-/* returns the gyroscope FIFO size and data in the y direction, rad/s */
-void MPU9250FIFO::getFifoGyroY_rads(size_t *size,float* data) {
-  *size = _gSize;
-  memcpy(data,_gyFifo,_gSize*sizeof(float));
+int8_t Mpu9250::fifo_gyro_y_radps(float * data, const std::size_t len) {
+  if (!data) {return -1;}
+  int8_t cpy_len = std::min(fifo_num_frames_, static_cast<int8_t>(len));
+  memcpy(data, fifo_gy_, cpy_len * sizeof(float));
+  return cpy_len;
 }
-
-/* returns the gyroscope FIFO size and data in the z direction, rad/s */
-void MPU9250FIFO::getFifoGyroZ_rads(size_t *size,float* data) {
-  *size = _gSize;
-  memcpy(data,_gzFifo,_gSize*sizeof(float));
+int8_t Mpu9250::fifo_gyro_z_radps(float * data, const std::size_t len) {
+  if (!data) {return -1;}
+  int8_t cpy_len = std::min(fifo_num_frames_, static_cast<int8_t>(len));
+  memcpy(data, fifo_gz_, cpy_len * sizeof(float));
+  return cpy_len;
 }
-
-/* returns the magnetometer FIFO size and data in the x direction, uT */
-void MPU9250FIFO::getFifoMagX_uT(size_t *size,float* data) {
-  *size = _hSize;
-  memcpy(data,_hxFifo,_hSize*sizeof(float));
-}
-
-/* returns the magnetometer FIFO size and data in the y direction, uT */
-void MPU9250FIFO::getFifoMagY_uT(size_t *size,float* data) {
-  *size = _hSize;
-  memcpy(data,_hyFifo,_hSize*sizeof(float));
-}
-
-/* returns the magnetometer FIFO size and data in the z direction, uT */
-void MPU9250FIFO::getFifoMagZ_uT(size_t *size,float* data) {
-  *size = _hSize;
-  memcpy(data,_hzFifo,_hSize*sizeof(float));
-}
-
-/* returns the die temperature FIFO size and data, C */
-void MPU9250FIFO::getFifoTemperature_C(size_t *size,float* data) {
-  *size = _tSize;
-  memcpy(data,_tFifo,_tSize*sizeof(float));  
-}
-
-/* estimates the gyro biases */
-int MPU9250::calibrateGyro() {
-  // set the range, bandwidth, and srd
-  if (setGyroRange(GYRO_RANGE_250DPS) < 0) {
-    return -1;
+#endif
+bool Mpu9250::WriteRegister(uint8_t reg, uint8_t data) {
+  uint8_t ret_val;
+  if (iface_ == I2C) {
+    i2c_->beginTransmission(dev_);
+    i2c_->write(reg);
+    i2c_->write(data);
+    i2c_->endTransmission();
+  } else {
+    spi_->beginTransaction(SPISettings(spi_clock_, MSBFIRST, SPI_MODE3));
+    #if defined(TEENSYDUINO)
+    digitalWriteFast(dev_, LOW);
+    #else
+    digitalWrite(dev_, LOW);
+    #endif
+    #if defined(__IMXRT1062__)
+      delayNanoseconds(50);
+    #endif
+    spi_->transfer(reg);
+    spi_->transfer(data);
+    #if defined(TEENSYDUINO)
+    digitalWriteFast(dev_, HIGH);
+    #else
+    digitalWrite(dev_, HIGH);
+    #endif
+    #if defined(__IMXRT1062__)
+      delayNanoseconds(50);
+    #endif
+    spi_->endTransaction();
   }
-  if (setDlpfBandwidth(DLPF_BANDWIDTH_20HZ) < 0) {
-    return -2;
-  }
-  if (setSrd(19) < 0) {
-    return -3;
-  }
-
-  // take samples and find bias
-  _gxbD = 0;
-  _gybD = 0;
-  _gzbD = 0;
-  for (size_t i=0; i < _numSamples; i++) {
-    readSensor();
-    _gxbD += (getGyroX_rads() + _gxb)/((double)_numSamples);
-    _gybD += (getGyroY_rads() + _gyb)/((double)_numSamples);
-    _gzbD += (getGyroZ_rads() + _gzb)/((double)_numSamples);
-    delay(20);
-  }
-  _gxb = (float)_gxbD;
-  _gyb = (float)_gybD;
-  _gzb = (float)_gzbD;
-
-  // set the range, bandwidth, and srd back to what they were
-  if (setGyroRange(_gyroRange) < 0) {
-    return -4;
-  }
-  if (setDlpfBandwidth(_bandwidth) < 0) {
-    return -5;
-  }
-  if (setSrd(_srd) < 0) {
-    return -6;
-  }
-  return 1;
-}
-
-/* returns the gyro bias in the X direction, rad/s */
-float MPU9250::getGyroBiasX_rads() {
-  return _gxb;
-}
-
-/* returns the gyro bias in the Y direction, rad/s */
-float MPU9250::getGyroBiasY_rads() {
-  return _gyb;
-}
-
-/* returns the gyro bias in the Z direction, rad/s */
-float MPU9250::getGyroBiasZ_rads() {
-  return _gzb;
-}
-
-/* sets the gyro bias in the X direction to bias, rad/s */
-void MPU9250::setGyroBiasX_rads(float bias) {
-  _gxb = bias;
-}
-
-/* sets the gyro bias in the Y direction to bias, rad/s */
-void MPU9250::setGyroBiasY_rads(float bias) {
-  _gyb = bias;
-}
-
-/* sets the gyro bias in the Z direction to bias, rad/s */
-void MPU9250::setGyroBiasZ_rads(float bias) {
-  _gzb = bias;
-}
-
-/* finds bias and scale factor calibration for the accelerometer,
-this should be run for each axis in each direction (6 total) to find
-the min and max values along each */
-int MPU9250::calibrateAccel() {
-  // set the range, bandwidth, and srd
-  if (setAccelRange(ACCEL_RANGE_2G) < 0) {
-    return -1;
-  }
-  if (setDlpfBandwidth(DLPF_BANDWIDTH_20HZ) < 0) {
-    return -2;
-  }
-  if (setSrd(19) < 0) {
-    return -3;
-  }
-
-  // take samples and find min / max 
-  _axbD = 0;
-  _aybD = 0;
-  _azbD = 0;
-  for (size_t i=0; i < _numSamples; i++) {
-    readSensor();
-    _axbD += (getAccelX_mss()/_axs + _axb)/((double)_numSamples);
-    _aybD += (getAccelY_mss()/_ays + _ayb)/((double)_numSamples);
-    _azbD += (getAccelZ_mss()/_azs + _azb)/((double)_numSamples);
-    delay(20);
-  }
-  if (_axbD > 9.0f) {
-    _axmax = (float)_axbD;
-  }
-  if (_aybD > 9.0f) {
-    _aymax = (float)_aybD;
-  }
-  if (_azbD > 9.0f) {
-    _azmax = (float)_azbD;
-  }
-  if (_axbD < -9.0f) {
-    _axmin = (float)_axbD;
-  }
-  if (_aybD < -9.0f) {
-    _aymin = (float)_aybD;
-  }
-  if (_azbD < -9.0f) {
-    _azmin = (float)_azbD;
-  }
-
-  // find bias and scale factor
-  if ((abs(_axmin) > 9.0f) && (abs(_axmax) > 9.0f)) {
-    _axb = (_axmin + _axmax) / 2.0f;
-    _axs = G/((abs(_axmin) + abs(_axmax)) / 2.0f);
-  }
-  if ((abs(_aymin) > 9.0f) && (abs(_aymax) > 9.0f)) {
-    _ayb = (_axmin + _axmax) / 2.0f;
-    _ays = G/((abs(_aymin) + abs(_aymax)) / 2.0f);
-  }
-  if ((abs(_azmin) > 9.0f) && (abs(_azmax) > 9.0f)) {
-    _azb = (_azmin + _azmax) / 2.0f;
-    _azs = G/((abs(_azmin) + abs(_azmax)) / 2.0f);
-  }
-
-  // set the range, bandwidth, and srd back to what they were
-  if (setAccelRange(_accelRange) < 0) {
-    return -4;
-  }
-  if (setDlpfBandwidth(_bandwidth) < 0) {
-    return -5;
-  }
-  if (setSrd(_srd) < 0) {
-    return -6;
-  }
-  return 1;  
-}
-
-/* returns the accelerometer bias in the X direction, m/s/s */
-float MPU9250::getAccelBiasX_mss() {
-  return _axb;
-}
-
-/* returns the accelerometer scale factor in the X direction */
-float MPU9250::getAccelScaleFactorX() {
-  return _axs;
-}
-
-/* returns the accelerometer bias in the Y direction, m/s/s */
-float MPU9250::getAccelBiasY_mss() {
-  return _ayb;
-}
-
-/* returns the accelerometer scale factor in the Y direction */
-float MPU9250::getAccelScaleFactorY() {
-  return _ays;
-}
-
-/* returns the accelerometer bias in the Z direction, m/s/s */
-float MPU9250::getAccelBiasZ_mss() {
-  return _azb;
-}
-
-/* returns the accelerometer scale factor in the Z direction */
-float MPU9250::getAccelScaleFactorZ() {
-  return _azs;
-}
-
-/* sets the accelerometer bias (m/s/s) and scale factor in the X direction */
-void MPU9250::setAccelCalX(float bias,float scaleFactor) {
-  _axb = bias;
-  _axs = scaleFactor;
-}
-
-/* sets the accelerometer bias (m/s/s) and scale factor in the Y direction */
-void MPU9250::setAccelCalY(float bias,float scaleFactor) {
-  _ayb = bias;
-  _ays = scaleFactor;
-}
-
-/* sets the accelerometer bias (m/s/s) and scale factor in the Z direction */
-void MPU9250::setAccelCalZ(float bias,float scaleFactor) {
-  _azb = bias;
-  _azs = scaleFactor;
-}
-
-/* finds bias and scale factor calibration for the magnetometer,
-the sensor should be rotated in a figure 8 motion until complete */
-int MPU9250::calibrateMag() {
-  // set the srd
-  if (setSrd(19) < 0) {
-    return -1;
-  }
-
-  // get a starting set of data
-  readSensor();
-  _hxmax = getMagX_uT();
-  _hxmin = getMagX_uT();
-  _hymax = getMagY_uT();
-  _hymin = getMagY_uT();
-  _hzmax = getMagZ_uT();
-  _hzmin = getMagZ_uT();
-
-  // collect data to find max / min in each channel
-  _counter = 0;
-  while (_counter < _maxCounts) {
-    _delta = 0.0f;
-    _framedelta = 0.0f;
-    readSensor();
-    _hxfilt = (_hxfilt*((float)_coeff-1)+(getMagX_uT()/_hxs+_hxb))/((float)_coeff);
-    _hyfilt = (_hyfilt*((float)_coeff-1)+(getMagY_uT()/_hys+_hyb))/((float)_coeff);
-    _hzfilt = (_hzfilt*((float)_coeff-1)+(getMagZ_uT()/_hzs+_hzb))/((float)_coeff);
-    if (_hxfilt > _hxmax) {
-      _delta = _hxfilt - _hxmax;
-      _hxmax = _hxfilt;
-    }
-    if (_delta > _framedelta) {
-      _framedelta = _delta;
-    }
-    if (_hyfilt > _hymax) {
-      _delta = _hyfilt - _hymax;
-      _hymax = _hyfilt;
-    }
-    if (_delta > _framedelta) {
-      _framedelta = _delta;
-    }
-    if (_hzfilt > _hzmax) {
-      _delta = _hzfilt - _hzmax;
-      _hzmax = _hzfilt;
-    }
-    if (_delta > _framedelta) {
-      _framedelta = _delta;
-    }
-    if (_hxfilt < _hxmin) {
-      _delta = abs(_hxfilt - _hxmin);
-      _hxmin = _hxfilt;
-    }
-    if (_delta > _framedelta) {
-      _framedelta = _delta;
-    }
-    if (_hyfilt < _hymin) {
-      _delta = abs(_hyfilt - _hymin);
-      _hymin = _hyfilt;
-    }
-    if (_delta > _framedelta) {
-      _framedelta = _delta;
-    }
-    if (_hzfilt < _hzmin) {
-      _delta = abs(_hzfilt - _hzmin);
-      _hzmin = _hzfilt;
-    }
-    if (_delta > _framedelta) {
-      _framedelta = _delta;
-    }
-    if (_framedelta > _deltaThresh) {
-      _counter = 0;
-    } else {
-      _counter++;
-    }
-    delay(20);
-  }
-
-  // find the magnetometer bias
-  _hxb = (_hxmax + _hxmin) / 2.0f;
-  _hyb = (_hymax + _hymin) / 2.0f;
-  _hzb = (_hzmax + _hzmin) / 2.0f;
-
-  // find the magnetometer scale factor
-  _hxs = (_hxmax - _hxmin) / 2.0f;
-  _hys = (_hymax - _hymin) / 2.0f;
-  _hzs = (_hzmax - _hzmin) / 2.0f;
-  _avgs = (_hxs + _hys + _hzs) / 3.0f;
-  _hxs = _avgs/_hxs;
-  _hys = _avgs/_hys;
-  _hzs = _avgs/_hzs;
-
-  // set the srd back to what it was
-  if (setSrd(_srd) < 0) {
-    return -2;
-  }
-  return 1;
-}
-
-/* returns the magnetometer bias in the X direction, uT */
-float MPU9250::getMagBiasX_uT() {
-  return _hxb;
-}
-
-/* returns the magnetometer scale factor in the X direction */
-float MPU9250::getMagScaleFactorX() {
-  return _hxs;
-}
-
-/* returns the magnetometer bias in the Y direction, uT */
-float MPU9250::getMagBiasY_uT() {
-  return _hyb;
-}
-
-/* returns the magnetometer scale factor in the Y direction */
-float MPU9250::getMagScaleFactorY() {
-  return _hys;
-}
-
-/* returns the magnetometer bias in the Z direction, uT */
-float MPU9250::getMagBiasZ_uT() {
-  return _hzb;
-}
-
-/* returns the magnetometer scale factor in the Z direction */
-float MPU9250::getMagScaleFactorZ() {
-  return _hzs;
-}
-
-/* sets the magnetometer bias (uT) and scale factor in the X direction */
-void MPU9250::setMagCalX(float bias,float scaleFactor) {
-  _hxb = bias;
-  _hxs = scaleFactor;
-}
-
-/* sets the magnetometer bias (uT) and scale factor in the Y direction */
-void MPU9250::setMagCalY(float bias,float scaleFactor) {
-  _hyb = bias;
-  _hys = scaleFactor;
-}
-
-/* sets the magnetometer bias (uT) and scale factor in the Z direction */
-void MPU9250::setMagCalZ(float bias,float scaleFactor) {
-  _hzb = bias;
-  _hzs = scaleFactor;
-}
-
-/* writes a byte to MPU9250 register given a register address and data */
-int MPU9250::writeRegister(uint8_t subAddress, uint8_t data){
-  /* write data to device */
-  if( _useSPI ){
-    _spi->beginTransaction(SPISettings(SPI_LS_CLOCK, MSBFIRST, SPI_MODE3)); // begin the transaction
-    digitalWrite(_csPin,LOW); // select the MPU9250 chip
-    _spi->transfer(subAddress); // write the register address
-    _spi->transfer(data); // write the data
-    digitalWrite(_csPin,HIGH); // deselect the MPU9250 chip
-    _spi->endTransaction(); // end the transaction
-  }
-  else{
-    _i2c->beginTransmission(_address); // open the device
-    _i2c->write(subAddress); // write the register address
-    _i2c->write(data); // write the data
-    _i2c->endTransmission();
-  }
-
   delay(10);
-  
-  /* read back the register */
-  readRegisters(subAddress,1,_buffer);
-  /* check the read back register against the written register */
-  if(_buffer[0] == data) {
-    return 1;
-  }
-  else{
-    return -1;
+  ReadRegisters(reg, sizeof(ret_val), &ret_val);
+  if (data == ret_val) {
+    return true;
+  } else {
+    return false;
   }
 }
-
-/* reads registers from MPU9250 given a starting register address, number of bytes, and a pointer to store data */
-int MPU9250::readRegisters(uint8_t subAddress, uint8_t count, uint8_t* dest){
-  if( _useSPI ){
-    // begin the transaction
-    if(_useSPIHS){
-      _spi->beginTransaction(SPISettings(SPI_HS_CLOCK, MSBFIRST, SPI_MODE3));
-    }
-    else{
-      _spi->beginTransaction(SPISettings(SPI_LS_CLOCK, MSBFIRST, SPI_MODE3));
-    }
-    digitalWrite(_csPin,LOW); // select the MPU9250 chip
-    _spi->transfer(subAddress | SPI_READ); // specify the starting register address
-    for(uint8_t i = 0; i < count; i++){
-      dest[i] = _spi->transfer(0x00); // read the data
-    }
-    digitalWrite(_csPin,HIGH); // deselect the MPU9250 chip
-    _spi->endTransaction(); // end the transaction
-    return 1;
-  }
-  else{
-    _i2c->beginTransmission(_address); // open the device
-    _i2c->write(subAddress); // specify the starting register address
-    _i2c->endTransmission(false);
-    _numBytes = _i2c->requestFrom(_address, count); // specify the number of bytes to receive
-    if (_numBytes == count) {
-      for(uint8_t i = 0; i < count; i++){ 
-        dest[i] = _i2c->read();
+bool Mpu9250::ReadRegisters(uint8_t reg, uint8_t count, uint8_t *data) {
+  if (iface_ == I2C) {
+    i2c_->beginTransmission(dev_);
+    i2c_->write(reg);
+    i2c_->endTransmission(false);
+    bytes_rx_ = i2c_->requestFrom(static_cast<uint8_t>(dev_), count);
+    if (bytes_rx_ == count) {
+      for (std::size_t i = 0; i < count; i++) {
+        data[i] = i2c_->read();
       }
-      return 1;
+      return true;
     } else {
-      return -1;
+      return false;
     }
+  } else {
+    spi_->beginTransaction(SPISettings(spi_clock_, MSBFIRST, SPI_MODE3));
+    #if defined(TEENSYDUINO)
+    digitalWriteFast(dev_, LOW);
+    #else
+    digitalWrite(dev_, LOW);
+    #endif
+    #if defined(__IMXRT1062__)
+      delayNanoseconds(50);
+    #endif
+    spi_->transfer(reg | SPI_READ_);
+    spi_->transfer(data, count);
+    #if defined(TEENSYDUINO)
+    digitalWriteFast(dev_, HIGH);
+    #else
+    digitalWrite(dev_, HIGH);
+    #endif
+    #if defined(__IMXRT1062__)
+      delayNanoseconds(50);
+    #endif
+    spi_->endTransaction();
+    return true;
   }
+}
+bool Mpu9250::WriteAk8963Register(uint8_t reg, uint8_t data) {
+  uint8_t ret_val;
+  if (!WriteRegister(I2C_SLV0_ADDR_, AK8963_I2C_ADDR_)) {
+    return false;
+  }
+  if (!WriteRegister(I2C_SLV0_REG_, reg)) {
+    return false;
+  }
+  if (!WriteRegister(I2C_SLV0_DO_, data)) {
+    return false;
+  }
+  if (!WriteRegister(I2C_SLV0_CTRL_, I2C_SLV0_EN_ | sizeof(data))) {
+    return false;
+  }
+  if (!ReadAk8963Registers(reg, sizeof(ret_val), &ret_val)) {
+    return false;
+  }
+  if (data == ret_val) {
+    return true;
+  } else {
+    return false;
+  }
+}
+bool Mpu9250::ReadAk8963Registers(uint8_t reg, uint8_t count, uint8_t *data) {
+  if (!WriteRegister(I2C_SLV0_ADDR_, AK8963_I2C_ADDR_ | I2C_READ_FLAG_)) {
+    return false;
+  }
+  if (!WriteRegister(I2C_SLV0_REG_, reg)) {
+    return false;
+  }
+  if (!WriteRegister(I2C_SLV0_CTRL_, I2C_SLV0_EN_ | count)) {
+    return false;
+  }
+  delay(1);
+  return ReadRegisters(EXT_SENS_DATA_00_, count, data);
 }
 
-/* writes a register to the AK8963 given a register address and data */
-int MPU9250::writeAK8963Register(uint8_t subAddress, uint8_t data){
-  // set slave 0 to the AK8963 and set for write
-	if (writeRegister(I2C_SLV0_ADDR,AK8963_I2C_ADDR) < 0) {
-    return -1;
-  }
-  // set the register to the desired AK8963 sub address 
-	if (writeRegister(I2C_SLV0_REG,subAddress) < 0) {
-    return -2;
-  }
-  // store the data for write
-	if (writeRegister(I2C_SLV0_DO,data) < 0) {
-    return -3;
-  }
-  // enable I2C and send 1 byte
-	if (writeRegister(I2C_SLV0_CTRL,I2C_SLV0_EN | (uint8_t)1) < 0) {
-    return -4;
-  }
-	// read the register and confirm
-	if (readAK8963Registers(subAddress,1,_buffer) < 0) {
-    return -5;
-  }
-	if(_buffer[0] == data) {
-  	return 1;
-  } else{
-  	return -6;
-  }
-}
-
-/* reads registers from the AK8963 */
-int MPU9250::readAK8963Registers(uint8_t subAddress, uint8_t count, uint8_t* dest){
-  // set slave 0 to the AK8963 and set for read
-	if (writeRegister(I2C_SLV0_ADDR,AK8963_I2C_ADDR | I2C_READ_FLAG) < 0) {
-    return -1;
-  }
-  // set the register to the desired AK8963 sub address
-	if (writeRegister(I2C_SLV0_REG,subAddress) < 0) {
-    return -2;
-  }
-  // enable I2C and request the bytes
-	if (writeRegister(I2C_SLV0_CTRL,I2C_SLV0_EN | count) < 0) {
-    return -3;
-  }
-	delay(1); // takes some time for these registers to fill
-  // read the bytes off the MPU9250 EXT_SENS_DATA registers
-	_status = readRegisters(EXT_SENS_DATA_00,count,dest); 
-  return _status;
-}
-
-/* gets the MPU9250 WHO_AM_I register value, expected to be 0x71 */
-int MPU9250::whoAmI(){
-  // read the WHO AM I register
-  if (readRegisters(WHO_AM_I,1,_buffer) < 0) {
-    return -1;
-  }
-  // return the register value
-  return _buffer[0];
-}
-
-/* gets the AK8963 WHO_AM_I register value, expected to be 0x48 */
-int MPU9250::whoAmIAK8963(){
-  // read the WHO AM I register
-  if (readAK8963Registers(AK8963_WHO_AM_I,1,_buffer) < 0) {
-    return -1;
-  }
-  // return the register value
-  return _buffer[0];
-}
+}  // namespace bfs

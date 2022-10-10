@@ -32,36 +32,70 @@
 
 #include "Adafruit_FRAM_SPI.h"
 
-/*!
- *  @brief  If class instance uses hardware SPI, beginTransaction
- */
-void Adafruit_FRAM_SPI::SPI_TRANSACTION_START() {
-  if (_clk == -1) {
-    _spi->beginTransaction(spiSettings);
-  } ///< Pre-SPI
-}
+/// Supported flash devices
+const struct {
+  uint8_t manufID; ///< Manufacture ID
+  uint16_t prodID; ///< Product ID
+  uint32_t size;   ///< Size in bytes
+} _supported_devices[] = {
+    // Sorted in numerical order
+    // Fujitsu
+    {0x04, 0x0101, 2 * 1024UL},   // MB85RS16
+    {0x04, 0x0302, 8 * 1024UL},   // MB85RS64V
+    {0x04, 0x2303, 8 * 1024UL},   // MB85RS64T
+    {0x04, 0x2503, 32 * 1024UL},  // MB85RS256TY
+    {0x04, 0x4803, 256 * 1024UL}, // MB85RS2MTA
+    {0x04, 0x4903, 512 * 1024UL}, // MB85RS4MT
+
+    // Cypress
+    {0x7F, 0x7F7f, 32 * 1024UL}, // FM25V02
+                                 // (manu = 7F7F7F7F7F7FC2, device = 0x2200)
+
+    // Lapis
+    {0xAE, 0x8305, 8 * 1024UL} // MR45V064B
+};
 
 /*!
- *  @brief  If class instance uses hardware SPI, endTransaction
+ *  @brief  Check if the flash device is supported
+ *  @param  manufID
+ *          ManufactureID to be checked
+ *  @param  prodID
+ *          ProductID to be checked
+ *  @return size of device, 0 if not supported
  */
-void Adafruit_FRAM_SPI::SPI_TRANSACTION_END() {
-  if (_clk == -1) {
-    _spi->endTransaction();
-  } ///< Post-SPI
+static uint32_t check_supported_device(uint8_t manufID, uint16_t prodID) {
+  for (uint8_t i = 0;
+       i < sizeof(_supported_devices) / sizeof(_supported_devices[0]); i++) {
+    if (manufID == _supported_devices[i].manufID &&
+        prodID == _supported_devices[i].prodID)
+      return _supported_devices[i].size;
+  }
+
+  Serial.print(F("Unexpected Device: Manufacturer ID = 0x"));
+  Serial.print(manufID, HEX);
+  Serial.print(F(", Product ID = 0x"));
+  Serial.println(prodID, HEX);
+
+  return 0;
 }
 
 /*!
  *  @brief  Instantiates a new SPI FRAM class using hardware SPI
  *  @param  cs
- *          optional cs pin number
+ *          Required chip select pin number
  *  @param  *theSPI
- *          SPI optional object
+ *          SPI interface object, defaults to &SPI
+ *  @param  freq
+ *          The SPI clock frequency to use, defaults to 1MHz
  */
-Adafruit_FRAM_SPI::Adafruit_FRAM_SPI(int8_t cs, SPIClass *theSPI) {
-  _cs = cs;
-  _clk = _mosi = _miso = -1;
-  _framInitialised = false;
-  *_spi = *theSPI;
+Adafruit_FRAM_SPI::Adafruit_FRAM_SPI(int8_t cs, SPIClass *theSPI,
+                                     uint32_t freq) {
+  if (spi_dev) {
+    delete spi_dev;
+  }
+
+  spi_dev = new Adafruit_SPIDevice(cs, freq, SPI_BITORDER_MSBFIRST, SPI_MODE0,
+                                   theSPI);
 }
 
 /*!
@@ -77,11 +111,12 @@ Adafruit_FRAM_SPI::Adafruit_FRAM_SPI(int8_t cs, SPIClass *theSPI) {
  */
 Adafruit_FRAM_SPI::Adafruit_FRAM_SPI(int8_t clk, int8_t miso, int8_t mosi,
                                      int8_t cs) {
-  _cs = cs;
-  _clk = clk;
-  _mosi = mosi;
-  _miso = miso;
-  _framInitialised = false;
+  if (spi_dev) {
+    delete spi_dev;
+  }
+
+  spi_dev = new Adafruit_SPIDevice(cs, clk, miso, mosi, 1000000,
+                                   SPI_BITORDER_MSBFIRST, SPI_MODE0);
 }
 
 /*!
@@ -89,29 +124,15 @@ Adafruit_FRAM_SPI::Adafruit_FRAM_SPI(int8_t clk, int8_t miso, int8_t mosi,
  *          doing anything else)
  *  @param  nAddressSizeBytes
  *          sddress size in bytes (default 2)
- *  @return true if succesful
+ *  @return true if successful
  */
-boolean Adafruit_FRAM_SPI::begin(uint8_t nAddressSizeBytes) {
-  if (_cs == -1) {
-    // Serial.println("No cs pin specified!");
-    return false;
-  }
-
-  setAddressSize(nAddressSizeBytes);
+bool Adafruit_FRAM_SPI::begin(uint8_t nAddressSizeBytes) {
+  (void)
+      nAddressSizeBytes; // not used anymore, since we will use auto-detect size
 
   /* Configure SPI */
-  pinMode(_cs, OUTPUT);
-  digitalWrite(_cs, HIGH);
-
-  if (_clk == -1) { // hardware SPI!
-    _spi->begin();
-    spiSettings =
-        SPISettings(20000000, MSBFIRST,
-                    SPI_MODE0); // Max SPI frequency for MB85RS64V is 20 MHz
-  } else {
-    pinMode(_clk, OUTPUT);
-    pinMode(_mosi, OUTPUT);
-    pinMode(_miso, INPUT);
+  if (!spi_dev->begin()) {
+    return false;
   }
 
   /* Make sure we're actually connected */
@@ -119,20 +140,20 @@ boolean Adafruit_FRAM_SPI::begin(uint8_t nAddressSizeBytes) {
   uint16_t prodID;
   getDeviceID(&manufID, &prodID);
 
-  if (manufID != 0x04 && manufID != 0x7f) {
-    // Serial.print("Unexpected Manufacturer ID: 0x"); Serial.println(manufID,
-    // HEX);
-    return false;
-  }
-  if (prodID != 0x0302 && prodID != 0x7f7f) {
-    // Serial.print("Unexpected Product ID: 0x"); Serial.println(prodID, HEX);
-    return false;
-  }
-
   /* Everything seems to be properly initialised and connected */
-  _framInitialised = true;
+  uint32_t flash_size = check_supported_device(manufID, prodID);
 
-  return true;
+  Serial.print(F("Flash Size = 0x"));
+  Serial.println(flash_size, HEX);
+
+  // Detect address size in bytes either 2 or 3 bytes (4 bytes is not supported)
+  if (flash_size > 64UL * 1024) {
+    setAddressSize(3);
+  } else {
+    setAddressSize(2);
+  }
+
+  return flash_size != 0;
 }
 
 /*!
@@ -141,15 +162,14 @@ boolean Adafruit_FRAM_SPI::begin(uint8_t nAddressSizeBytes) {
             True enables writes, false disables writes
 */
 void Adafruit_FRAM_SPI::writeEnable(bool enable) {
-  SPI_TRANSACTION_START();
-  digitalWrite(_cs, LOW);
+  uint8_t cmd;
+
   if (enable) {
-    SPItransfer(OPCODE_WREN);
+    cmd = OPCODE_WREN;
   } else {
-    SPItransfer(OPCODE_WRDI);
+    cmd = OPCODE_WRDI;
   }
-  digitalWrite(_cs, HIGH);
-  SPI_TRANSACTION_END();
+  spi_dev->write(&cmd, 1);
 }
 
 /*!
@@ -160,14 +180,19 @@ void Adafruit_FRAM_SPI::writeEnable(bool enable) {
  *         The 8-bit value to write at framAddr
  */
 void Adafruit_FRAM_SPI::write8(uint32_t addr, uint8_t value) {
-  SPI_TRANSACTION_START();
-  digitalWrite(_cs, LOW);
-  SPItransfer(OPCODE_WRITE);
-  writeAddress(addr);
-  SPItransfer(value);
-  /* CS on the rising edge commits the WRITE */
-  digitalWrite(_cs, HIGH);
-  SPI_TRANSACTION_END();
+  uint8_t buffer[10];
+  uint8_t i = 0;
+
+  buffer[i++] = OPCODE_WRITE;
+  if (_nAddressSizeBytes > 3)
+    buffer[i++] = (uint8_t)(addr >> 24);
+  if (_nAddressSizeBytes > 2)
+    buffer[i++] = (uint8_t)(addr >> 16);
+  buffer[i++] = (uint8_t)(addr >> 8);
+  buffer[i++] = (uint8_t)(addr & 0xFF);
+  buffer[i++] = value;
+
+  spi_dev->write(buffer, i);
 }
 
 /*!
@@ -181,16 +206,18 @@ void Adafruit_FRAM_SPI::write8(uint32_t addr, uint8_t value) {
  */
 void Adafruit_FRAM_SPI::write(uint32_t addr, const uint8_t *values,
                               size_t count) {
-  SPI_TRANSACTION_START();
-  digitalWrite(_cs, LOW);
-  SPItransfer(OPCODE_WRITE);
-  writeAddress(addr);
-  for (size_t i = 0; i < count; i++) {
-    SPItransfer(values[i]);
-  }
-  /* CS on the rising edge commits the WRITE */
-  digitalWrite(_cs, HIGH);
-  SPI_TRANSACTION_END();
+  uint8_t prebuf[10];
+  uint8_t i = 0;
+
+  prebuf[i++] = OPCODE_WRITE;
+  if (_nAddressSizeBytes > 3)
+    prebuf[i++] = (uint8_t)(addr >> 24);
+  if (_nAddressSizeBytes > 2)
+    prebuf[i++] = (uint8_t)(addr >> 16);
+  prebuf[i++] = (uint8_t)(addr >> 8);
+  prebuf[i++] = (uint8_t)(addr & 0xFF);
+
+  spi_dev->write(values, count, prebuf, i);
 }
 
 /*!
@@ -200,15 +227,20 @@ void Adafruit_FRAM_SPI::write(uint32_t addr, const uint8_t *values,
  *   @return The 8-bit value retrieved at framAddr
  */
 uint8_t Adafruit_FRAM_SPI::read8(uint32_t addr) {
-  SPI_TRANSACTION_START();
-  digitalWrite(_cs, LOW);
-  SPItransfer(OPCODE_READ);
-  writeAddress(addr);
-  uint8_t x = SPItransfer(0);
-  digitalWrite(_cs, HIGH);
-  SPI_TRANSACTION_END();
+  uint8_t buffer[10], val;
+  uint8_t i = 0;
 
-  return x;
+  buffer[i++] = OPCODE_READ;
+  if (_nAddressSizeBytes > 3)
+    buffer[i++] = (uint8_t)(addr >> 24);
+  if (_nAddressSizeBytes > 2)
+    buffer[i++] = (uint8_t)(addr >> 16);
+  buffer[i++] = (uint8_t)(addr >> 8);
+  buffer[i++] = (uint8_t)(addr & 0xFF);
+
+  spi_dev->write_then_read(buffer, i, &val, 1);
+
+  return val;
 }
 
 /*!
@@ -221,16 +253,18 @@ uint8_t Adafruit_FRAM_SPI::read8(uint32_t addr) {
  *           The number of bytes to read
  */
 void Adafruit_FRAM_SPI::read(uint32_t addr, uint8_t *values, size_t count) {
-  SPI_TRANSACTION_START();
-  digitalWrite(_cs, LOW);
-  SPItransfer(OPCODE_READ);
-  writeAddress(addr);
-  for (size_t i = 0; i < count; i++) {
-    uint8_t x = SPItransfer(0);
-    values[i] = x;
-  }
-  digitalWrite(_cs, HIGH);
-  SPI_TRANSACTION_END();
+  uint8_t buffer[10];
+  uint8_t i = 0;
+
+  buffer[i++] = OPCODE_READ;
+  if (_nAddressSizeBytes > 3)
+    buffer[i++] = (uint8_t)(addr >> 24);
+  if (_nAddressSizeBytes > 2)
+    buffer[i++] = (uint8_t)(addr >> 16);
+  buffer[i++] = (uint8_t)(addr >> 8);
+  buffer[i++] = (uint8_t)(addr & 0xFF);
+
+  spi_dev->write_then_read(buffer, i, values, count);
 }
 
 /*!
@@ -244,25 +278,22 @@ void Adafruit_FRAM_SPI::read(uint32_t addr, uint8_t *values, size_t count) {
  */
 void Adafruit_FRAM_SPI::getDeviceID(uint8_t *manufacturerID,
                                     uint16_t *productID) {
+  uint8_t cmd = OPCODE_RDID;
   uint8_t a[4] = {0, 0, 0, 0};
-  // uint8_t results;
 
-  SPI_TRANSACTION_START();
-  digitalWrite(_cs, LOW);
-  SPItransfer(OPCODE_RDID);
-  a[0] = SPItransfer(0);
-  a[1] = SPItransfer(0);
-  a[2] = SPItransfer(0);
-  a[3] = SPItransfer(0);
-  digitalWrite(_cs, HIGH);
-  SPI_TRANSACTION_END();
+  spi_dev->write_then_read(&cmd, 1, a, 4);
 
-  /* Shift values to separate manuf and prod IDs */
-  /* See p.10 of
-   * http://www.fujitsu.com/downloads/MICRO/fsa/pdf/products/memory/fram/MB85RS64V-DS501-00015-4v0-E.pdf
-   */
-  *manufacturerID = (a[0]);
-  *productID = (a[2] << 8) + a[3];
+  if (a[1] == 0x7f) {
+    // Device with continuation code (0x7F) in their second byte
+    // Manu ( 1 byte)  - 0x7F - Product (2 bytes)
+    *manufacturerID = (a[0]);
+    *productID = (a[2] << 8) + a[3];
+  } else {
+    // Device without continuation code
+    // Manu ( 1 byte)  - Product (2 bytes)
+    *manufacturerID = (a[0]);
+    *productID = (a[1] << 8) + a[2];
+  }
 }
 
 /*!
@@ -270,16 +301,13 @@ void Adafruit_FRAM_SPI::getDeviceID(uint8_t *manufacturerID,
     @return register value
 */
 uint8_t Adafruit_FRAM_SPI::getStatusRegister() {
-  uint8_t reg = 0;
+  uint8_t cmd, val;
 
-  SPI_TRANSACTION_START();
-  digitalWrite(_cs, LOW);
-  SPItransfer(OPCODE_RDSR);
-  reg = SPItransfer(0);
-  digitalWrite(_cs, HIGH);
-  SPI_TRANSACTION_END();
+  cmd = OPCODE_RDSR;
 
-  return reg;
+  spi_dev->write_then_read(&cmd, 1, &val, 1);
+
+  return val;
 }
 
 /*!
@@ -288,12 +316,12 @@ uint8_t Adafruit_FRAM_SPI::getStatusRegister() {
  *           value that will be set
  */
 void Adafruit_FRAM_SPI::setStatusRegister(uint8_t value) {
-  SPI_TRANSACTION_START();
-  digitalWrite(_cs, LOW);
-  SPItransfer(OPCODE_WRSR);
-  SPItransfer(value);
-  digitalWrite(_cs, HIGH);
-  SPI_TRANSACTION_END();
+  uint8_t cmd[2];
+
+  cmd[0] = OPCODE_WRSR;
+  cmd[1] = value;
+
+  spi_dev->write(cmd, 2);
 }
 
 /*!
@@ -303,31 +331,4 @@ void Adafruit_FRAM_SPI::setStatusRegister(uint8_t value) {
  */
 void Adafruit_FRAM_SPI::setAddressSize(uint8_t nAddressSize) {
   _nAddressSizeBytes = nAddressSize;
-}
-
-uint8_t Adafruit_FRAM_SPI::SPItransfer(uint8_t x) {
-  if (_clk == -1) {
-    return _spi->transfer(x);
-  } else {
-    // Serial.println("Software SPI");
-    uint8_t reply = 0;
-    for (int i = 7; i >= 0; i--) {
-      reply <<= 1;
-      digitalWrite(_clk, LOW);
-      digitalWrite(_mosi, x & (1 << i));
-      digitalWrite(_clk, HIGH);
-      if (digitalRead(_miso))
-        reply |= 1;
-    }
-    return reply;
-  }
-}
-
-void Adafruit_FRAM_SPI::writeAddress(uint32_t addr) {
-  if (_nAddressSizeBytes > 3)
-    SPItransfer((uint8_t)(addr >> 24));
-  if (_nAddressSizeBytes > 2)
-    SPItransfer((uint8_t)(addr >> 16));
-  SPItransfer((uint8_t)(addr >> 8));
-  SPItransfer((uint8_t)(addr & 0xFF));
 }

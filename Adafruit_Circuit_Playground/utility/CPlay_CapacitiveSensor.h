@@ -19,10 +19,10 @@
 #include "WProgram.h"
 #endif
 
-#if defined(ARDUINO_CIRCUITPLAY_NRF52840)
+#if defined(ARDUINO_NRF52840_CIRCUITPLAY)
 #define RwReg uint32_t
 #elif defined(__AVR__)
-#define RwReg uint8_t
+typedef volatile uint8_t RwReg;
 #endif
 
 
@@ -52,6 +52,7 @@ class CPlay_CapacitiveSensor
 	unsigned long  CS_AutocaL_Millis;
 	unsigned long  lastCal;
 	unsigned long  total;
+	uint8_t _sendPin, _receivePin;
 	volatile RwReg *send_outport, *recv_outport, *recv_inport, *recv_direction;
 	RwReg send_mask, recv_mask;
   

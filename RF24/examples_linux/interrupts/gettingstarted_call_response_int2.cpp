@@ -2,7 +2,6 @@
 TMRh20 2014 - Updated to work with optimized RF24 Arduino library
 */
 
-
 /**
  * Example for efficient call-response using ack-payloads
  *
@@ -36,12 +35,11 @@ bool radioNumber = 1;
 int interruptPin = 23;
 /********************************/
 
-
 // Radio pipe addresses for the 2 nodes to communicate.
 const uint8_t addresses[][6] = {"1Node", "2Node"};
 
 bool role_ping_out = 1, role_pong_back = 0, role = 0;
-uint8_t counter = 1;                                                          // A single byte to keep track of the data being sent back and forth
+uint8_t counter = 1; // A single byte to keep track of the data being sent back and forth
 uint32_t timer = 0;
 
 void intHandler()
@@ -80,10 +78,8 @@ void intHandler()
             gotByte += 1;
             radio.writeAckPayload(pipeNo, &gotByte, 1);
             printf("Loaded next response %d \n\r", gotByte);
-
         }
     }
-
 }
 
 int main(int argc, char** argv)
@@ -91,10 +87,9 @@ int main(int argc, char** argv)
 
     cout << "RPi/RF24/examples/gettingstarted_call_response\n";
     radio.begin();
-    radio.enableAckPayload();               // Allow optional ack payloads
-    radio.enableDynamicPayloads();
-    radio.printDetails();                   // Dump the configuration of the rf unit for debugging
-
+    radio.enableAckPayload();      // Allow optional ack payloads
+    radio.enableDynamicPayloads(); // needed for using ACK payloads
+    radio.printDetails();          // Dump the configuration of the rf unit for debugging
 
     /********* Role chooser ***********/
 
@@ -107,19 +102,24 @@ int main(int argc, char** argv)
     if (input.length() == 1) {
         myChar = input[0];
         if (myChar == '0') {
-            cout << "Role: Pong Back, awaiting transmission " << endl << endl;
-        } else {
-            cout << "Role: Ping Out, starting transmission " << endl << endl;
+            cout << "Role: Pong Back, awaiting transmission " << endl
+                 << endl;
+        }
+        else {
+            cout << "Role: Ping Out, starting transmission " << endl
+                 << endl;
             role = role_ping_out;
         }
     }
+
     /***********************************/
     // This opens two pipes for these two nodes to communicate
     // back and forth.
     if (!radioNumber) {
         radio.openWritingPipe(addresses[0]);
         radio.openReadingPipe(1, addresses[1]);
-    } else {
+    }
+    else {
         radio.openWritingPipe(addresses[1]);
         radio.openReadingPipe(1, addresses[0]);
     }
@@ -131,26 +131,22 @@ int main(int argc, char** argv)
     // forever loop
     while (1) {
 
-
         /****************** Ping Out Role ***************************/
 
-        if (role == role_ping_out) {                               // Radio is in ping mode
-
+        if (role == role_ping_out) // Radio is in ping mode
+        {
             //uint8_t gotByte;                                      // Initialize a variable for the incoming response
 
-            radio.stopListening();                                  // First, stop listening so we can talk.
-            printf("Now sending %d as payload. ", counter);          // Use a simple byte counter as payload
-            timer = millis();                                       // Record the current microsecond count
+            radio.stopListening();                          // First, stop listening so we can talk.
+            printf("Now sending %d as payload. ", counter); // Use a simple byte counter as payload
+            timer = millis();                               // Record the current microsecond count
 
-            radio.startWrite(&counter, 1, false);                         // Send the counter variable to the other radio
-            sleep(1);  // Try again later
+            radio.startWrite(&counter, 1, false); // Send the counter variable to the other radio
+            sleep(1);                             // Try again later
         }
 
         /****************** Pong Back Role ***************************/
-
-
+        // This is done by using ACK payloads & IRQ
 
     } //while 1
 } //main
-
-

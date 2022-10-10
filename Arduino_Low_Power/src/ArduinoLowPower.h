@@ -18,6 +18,12 @@
 
 #define RTC_ALARM_WAKEUP	0xFF
 
+#ifdef ARDUINO_API_VERSION
+using irq_mode = PinStatus;
+#else
+using irq_mode = uint32_t;
+#endif
+
 //typedef void (*voidFuncPtr)( void ) ;
 typedef void (*onOffFuncPtr)( bool ) ;
 
@@ -27,6 +33,16 @@ typedef enum{
 	NFC_WAKEUP = 2,
 	ANALOG_COMPARATOR_WAKEUP = 3
 } wakeup_reason;
+
+#ifdef ARDUINO_ARCH_SAMD
+enum adc_interrupt
+{
+	ADC_INT_BETWEEN,
+	ADC_INT_OUTSIDE,
+	ADC_INT_ABOVE_MIN,
+	ADC_INT_BELOW_MAX,
+};
+#endif
 
 
 class ArduinoLowPowerClass {
@@ -49,7 +65,7 @@ class ArduinoLowPowerClass {
 			deepSleep((uint32_t)millis);
 		}
 
-		void attachInterruptWakeup(uint32_t pin, voidFuncPtr callback, uint32_t mode);
+		void attachInterruptWakeup(uint32_t pin, voidFuncPtr callback, irq_mode mode);
 
 		#ifdef BOARD_HAS_COMPANION_CHIP
 		void companionLowPowerCallback(onOffFuncPtr callback) {
@@ -68,10 +84,17 @@ class ArduinoLowPowerClass {
 		wakeup_reason wakeupReason();
 		#endif
 
+		#ifdef ARDUINO_ARCH_SAMD
+		void attachAdcInterrupt(uint32_t pin, voidFuncPtr callback, adc_interrupt mode, uint16_t lo, uint16_t hi);
+		void detachAdcInterrupt();
+		#endif
+
 	private:
 		void setAlarmIn(uint32_t millis);
 		#ifdef ARDUINO_ARCH_SAMD
 		RTCZero rtc;
+		voidFuncPtr adc_cb;
+		friend void ADC_Handler();
 		#endif
 		#ifdef BOARD_HAS_COMPANION_CHIP
 		void (*companionSleepCB)(bool);

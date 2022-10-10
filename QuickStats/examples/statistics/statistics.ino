@@ -1,4 +1,19 @@
 // Example program for use with QuickStats.h 
+// Author: D. Dubins
+// Date: 08-Dec-21
+/* Expected Results:
+Descriptive Statistics
+Average: 3.62
+Geometric mean: 3.11
+Minimum: 1.00
+Maximum: 7.00
+Standard Deviation: 2.00
+Standard Error: 0.67
+Coefficient of Variation (%): 55.23
+Median: 3.30
+Mode: 2.20
+GMDN: 3.33
+*/
 
 #include "QuickStats.h"
  
@@ -29,6 +44,8 @@ void setup()
   Serial.println(stats.median(readings,numreadings));
   Serial.print("Mode: ");
   Serial.println(stats.mode(readings,numreadings,0.00001));
+  Serial.print("Geothmetic Meandian: ");
+  Serial.println(stats.gmdn(readings,numreadings,0.00001));
 }
  
 void loop()

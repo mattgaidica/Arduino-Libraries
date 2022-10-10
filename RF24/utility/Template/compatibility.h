@@ -1,26 +1,17 @@
-/* 
- * File:   compatiblity.h
- * Author: purinda
- *
- * Created on 24 June 2012, 3:08 PM
+/**
+ * @file compatibility.h
+ * Class declaration for SPI helper files
  */
 
 /**
-* @file compatibility.h
-* Class declaration for SPI helper files
-*/
+ * Example of compatibility.h class declaration for timing functions portability
+ *
+ * @defgroup Porting_Timing Porting: Timing
+ * @{
+ */
 
-/**
-* Example of compatibility.h class declaration for timing functions portability
-*
-* @defgroup Porting_Timing Porting: Timing
-*
-*
-* @{
-*/
-
-#ifndef COMPATIBLITY_H
-#define COMPATIBLITY_H
+#ifndef RF24_UTILITY_TEMPLATE_COMPATIBLITY_H_
+#define RF24_UTILITY_TEMPLATE_COMPATIBLITY_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,10 +29,10 @@ void __start_timer();
 
 long __millis();
 
-#ifdef    __cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif    /* COMPATIBLITY_H */
+/**@}*/
 
-/*@}*/	
+#endif // RF24_UTILITY_TEMPLATE_COMPATIBLITY_H_

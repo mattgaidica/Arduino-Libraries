@@ -15,7 +15,7 @@
  * interrupts is also in a separate folder IRLibFreq.
  */
 
-#if !defined(ARDUINO_CIRCUITPLAY_NRF52840)
+#if !defined(ARDUINO_NRF52840_CIRCUITPLAY)
 
 #include "IRLibRecvBase.h"
 #include "IRLibHardware.h"
@@ -159,6 +159,7 @@ void IRrecvBase::setFrameTimeout(uint16_t frameTimeout) {
  * 2) The buffer overflowed we have to quit. The parameter is for debugging purposes only.
  */
 void IRLib_IRrecvComplete(uint8_t Reason) {
+  (void)Reason;
   // Here we are finished. Let the world know there is new data available.
   recvGlobal.newDataAvailable=true;
   recvGlobal.currentState=STATE_FINISHED;//this essentially pauses the receiver ISR
