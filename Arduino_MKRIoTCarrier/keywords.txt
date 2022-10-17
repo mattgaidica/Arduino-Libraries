@@ -1,0 +1,64 @@
+#######################################
+# Syntax Coloring Map For Qtouch
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+Arduino_MKRIoTCarrier	KEYWORD1
+MKRIoTCarrier	KEYWORD1
+
+Light	KEYWORD1
+Pressure	KEYWORD1
+IMUmodule	KEYWORD1
+Env	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+Relay1	KEYWORD2
+Relay2	KEYWORD2
+open	KEYWORD2
+close	KEYWORD2
+getStatus	KEYWORD2
+
+Buzzer	KEYWORD2
+getPin	KEYWORD2
+sound	KEYWORD2
+noSound	KEYWORD2
+
+Buttons	KEYWORD2
+Button0	KEYWORD2
+Button1	KEYWORD2
+Button2	KEYWORD2
+Button3	KEYWORD2
+Button4	KEYWORD2
+getTouch	KEYWORD2
+onTouchDown	KEYWORD2
+onTouchUp	KEYWORD2
+onTouchChange	KEYWORD2
+updateConfig	KEYWORD2
+update	KEYWORD2
+t_state	KEYWORD2
+
+display	KEYWORD2
+
+leds	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+CARRIER_CASE	LITERAL1
+BUZZER	LITERAL1
+RELAY_1	LITERAL1
+RELAY_2	LITERAL1
+GROVE_AN1	LITERAL1
+GROVE_AN2	LITERAL1
+SD_CS	LITERAL1
+UP	LITERAL1
+DOWN	LITERAL1
+RIGHT	LITERAL1
+LEFT	LITERAL1

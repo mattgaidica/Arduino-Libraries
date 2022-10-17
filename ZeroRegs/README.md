@@ -8,6 +8,7 @@ but not the _status_ registers.
 
 [![Build Status](https://travis-ci.org/drewfish/arduino-ZeroRegs.svg?branch=master)](https://travis-ci.org/drewfish/arduino-ZeroRegs)
 
+
 Examples
 --------
 This will show the registers when the device boots:
@@ -20,7 +21,6 @@ void setup() {
     printZeroRegs(opts);
 }
 ```
-
 
 This will show the registers every time USB is connected:
 ```cpp
@@ -43,6 +43,26 @@ void loop() {
 ```
 
 
+Output Conventions
+------------------
+The following conventions are followed as best as possible:
+
+Each peripheral prints its own section, with a header.
+Example: `--------------------------- PERIPHERAL`
+
+Each register is printed on it's own line.
+Example: `REGISTER:  ...fields...`.
+
+Register fields which are boolean flags are either shown (if set) or not shown (if not set).
+
+Register fields which aren't boolean flags are shown as `NAME=VALUE`.
+If the value is printed directly (either decimal or hexadecimal) then the field name will be uppercase.
+Hexadecimal values are always prefixed with `0x`.
+If the value is interpretted in any way (such as referenced from a table) then the field name will be lowercase.
+
+Any editorial comments made by this library will be in lower case surrounded by parentheses.
+Example: `(slow)`.
+
 
 Function Reference
 ------------------
@@ -52,32 +72,28 @@ Function Reference
 
 | type | name | description |
 | ---- | ---- | ---- |
-| `Stream&` | `ser` | stream used for printing output |
-| `bool` | `showDisabled` | whether to show itmes which are disabled |
+| `Print&` | `out` | object used for printing output |
+| `bool` | `showDisabled` | whether to show items which are disabled |
 
 
 ### void printZeroRegs(ZeroRegOptions &opts)
 Prints out configuration registers, as many as this library knows how.
 
 
-### void printZeroRegAC(ZeroRegOptions &opts) -- **NOT YET IMPLEMENTED**
+### void printZeroRegAC(ZeroRegOptions &opts)
 Prints out the configuration registers for the `AC` peripheral.
 
 
-### void printZeroRegADC(ZeroRegOptions &opts) -- **NOT YET IMPLEMENTED**
+### void printZeroRegADC(ZeroRegOptions &opts)
 Prints out the configuration registers for the `ADC` peripheral.
 
 
-### void printZeroRegDAC(ZeroRegOptions &opts) -- **NOT YET IMPLEMENTED**
+### void printZeroRegDAC(ZeroRegOptions &opts)
 Prints out the configuration registers for the `DAC` peripheral.
 
 
-### void printZeroRegDMAC(ZeroRegOptions &opts) -- **NOT YET IMPLEMENTED**
+### void printZeroRegDMAC(ZeroRegOptions &opts)
 Prints out the configuration registers for the `DMAC` peripheral.
-
-
-### void printZeroRegDSU(ZeroRegOptions &opts) -- **NOT YET IMPLEMENTED**
-Prints out the configuration registers for the `DSU` peripheral.
 
 
 ### void printZeroRegEIC(ZeroRegOptions &opts)
@@ -86,7 +102,7 @@ Prints out the configuration registers for the `EIC` peripheral.
 example output:
 ```text
 --------------------------- EIC
-EXTINT07:  BOTH
+EXTINT03:  sense=FALL WAKEUP
 ```
 
 
@@ -100,29 +116,25 @@ Prints out the configuration registers for the `GCLK` peripheral.
 example output:
 ```text
 --------------------------- GCLK
+GEN00:  GENEN DFLL48M IDC
+GEN01:  GENEN XOSC32K
+GEN02:  GENEN XOSC32K/32
+GEN03:  GENEN OSC8M
 GCLK_MAIN:  GEN00 (always)
-GCLK_DFLL48M_REF:  GEN01
-GCLK_RTC:  GEN02
-GCLK_EIC:  GEN00
-GCLK_USB:  GEN00
-GCLK_SERCOM0_CORE:  GEN00
-GCLK_SERCOM1_CORE:  GEN00
-GCLK_SERCOM3_CORE:  GEN00
-GCLK_ADC:  GEN00
-GCLK_DAC:  GEN00
-GEN00:  DFLL48M IDC
-GEN01:  XOSC32K
-GEN02:  XOSC32K/32
-GEN03:  OSC8M
+GCLK_DFLL48M_REF:  CLKEN GEN01
+GCLK_RTC:  CLKEN GEN02
+GCLK_EIC:  CLKEN GEN00
+GCLK_USB:  CLKEN GEN00
+GCLK_SERCOM0_CORE:  CLKEN GEN00
+GCLK_SERCOM3_CORE:  CLKEN GEN00
+GCLK_SERCOM4_CORE:  CLKEN GEN00
+GCLK_ADC:  CLKEN GEN00
+GCLK_DAC:  CLKEN GEN00
 ```
 
 
-### void printZeroRegI2S(ZeroRegOptions &opts) -- **NOT YET IMPLEMENTED**
+### void printZeroRegI2S(ZeroRegOptions &opts)
 Prints out the configuration registers for the `I2S` peripheral.
-
-
-### void printZeroRegMTB(ZeroRegOptions &opts) -- **NOT YET IMPLEMENTED**
-Prints out the configuration registers for the `MTB` peripheral.
 
 
 ### void printZeroRegNVMCTRL(ZeroRegOptions &opts)
@@ -131,16 +143,16 @@ Prints out the configuration registers for the `NVMCTRL` peripheral.
 example output:
 ```text
 --------------------------- NVMCTRL
-CTRLB:  RWS=1 SLEEPPRM=WAKEONACCESS READMODE=NO_MISS_PENALTY
-PARAM:  NVMP=4096 PSZ=64 RWWEEPROM=0
-STATUS:
+CTRLB:  RWS=1 MANW sleepprm=WAKEONACCESS readmode=NO_MISS_PENALTY
+PARAM:  NVMP=4096 psz=64bytes
 LOCK:  1111111111111111
-user row:  BOOTPROT=0 EEPROM_SIZE=0 REGION_LOCKS=1111111111111111
-serial # 0x594A1C9A 0x514D3246 0x43202020 0xFF0A1919
+user row:  bootprot=0 eeprom_size=0 region_locks=1111111111111111
+software calibration:  ADC_LINEARITY=0x10 ADC_BIAS=0x7 OSC32K_CAL=0x7E USB_TRANSN=0xA USB_TRANSP=0x1A USB_TRIM=0x7 DFLL48M_COARSE_CAL=0x2C
+serial # 0x59FC4595 0x514D464F 0x4F202020 0xFF140C28
 ```
 
 
-### void printZeroRegPACs(ZeroRegOptions &opts)
+### void printZeroRegPAC(ZeroRegOptions &opts)
 Prints out the configuration registers for the `PAC` peripherals.
 
 
@@ -150,17 +162,15 @@ Prints out the configuration registers for the `PM` peripheral.
 example output:
 ```text
 --------------------------- PM
-SLEEP:  IDLE=CPU
-EXTCTRL:
-CPUSEL:  CPUDIV=1
-APBASEL:  APBADIV=1
-APBBSEL:  APBBDIV=1
-APBCSEL:  APBCDIV=1
+SLEEP:  idle=CPU
+CPUSEL:  /1
+APBASEL:  /1
+APBBSEL:  /1
+APBCSEL:  /1
 AHBMASK:  CLK_HPBA_AHB CLK_HPBB_AHB CLK_HPBC_AHB CLK_DSU_AHB CLK_NVMCTRL_AHB CLK_DMAC_AHB CLK_USB_AHB
 APBAMASK:  CLK_PAC0_APB CLK_PM_APB CLK_SYSCTRL_APB CLK_GCLK_APB CLK_WDT_APB CLK_RTC_APB CLK_EIC_APB
 APBBMASK:  CLK_PAC1_APB CLK_DSU_APB CLK_NVMCTRL_APB CLK_PORT_APB CLK_DMAC_APB CLK_USB_APB
-APBCMASK:  CLK_SERCOM0_APB CLK_SERCOM1_APB CLK_SERCOM2_APB CLK_SERCOM3_APB CLK_SERCOM4_APB CLK_SERCOM5_APB CLK_TCC0_APB CLK_TCC1_APB CLK_TCC2_APB CLK_TC3_APB CLK_TC4_APB CLK_TC5_APB CLK_ADC_APB CLK_DAC_APB
-RCAUSE:  SYST
+APBCMASK:  CLK_SERCOM0_APB CLK_SERCOM1_APB CLK_SERCOM2_APB CLK_SERCOM3_APB CLK_SERCOM4_APB CLK_SERCOM5_APB CLK_TCC0_APB CLK_TCC1_APB CLK_TCC2_APB CLK_TC3_APB CLK_TC4_APB CLK_TC5_APB CLK_TC6_APB CLK_TC7_APB CLK_ADC_APB CLK_DAC_APB
 ```
 
 
@@ -169,35 +179,43 @@ Prints out the configuration registers for the `PORT` peripheral.
 
 example output:
 ```text
---------------------------- PORT
-PA11 D0/RX:  PMUX=SERCOM0:3
-PA10 D1/TX:  PMUX=SERCOM0:2
-PA14 D2:  DIR=IN INEN
-PA09 D3:  DIR=IN INEN
-PA08 D4:  DIR=IN INEN
-PA15 D5:  DIR=IN INEN
-PA20 D6:  DIR=IN INEN
-PA21 D7:  DIR=IN INEN
-PA06 D8:  DIR=IN INEN
-PA07 D9:  PMUX=EIC:7
-PA18 D10:  DIR=IN INEN
-PA16 D11:  PMUX=SERCOM1:0
-PA19 D12:  PMUX=SERCOM1:3
-PA17 D13:  PMUX=SERCOM1:1
-PA02 A0:  PMUX=AIN0/Y0/VOUT
-PA22 SDA:  PMUX=SERCOM3:0
-PA23 SCL:  PMUX=SERCOM3:1
-PA24 USB_DM:  PMUX=USB:DM
-PA25 USB_DP:  PMUX=USB:DP
-PA22 EDBG_SDA:  PMUX=SERCOM3:0
-PA23 EDBG_SCL:  PMUX=SERCOM3:1
-PA19 EDBG_MISO:  PMUX=SERCOM1:3
-PA16 EDBG_MOSI:  PMUX=SERCOM1:0
-PA18 EDBG_SS:  DIR=IN INEN
-PA17 EDBG_SCK:  PMUX=SERCOM1:1
-PA21 EDBG_GPIO1:  DIR=IN INEN
-PA06 EDBG_GPIO2:  DIR=IN INEN
-PA07 EDBG_GPIO3:  PMUX=EIC:7
+--------------------------- PORT A
+PA10:  pmux=SERCOM0:2(usart:tx)
+PA11:  pmux=SERCOM0:3(usart:rx)
+PA12:  pmux=SERCOM4:0(spi:miso)
+PA17:  output INEN
+PA19:  pmux=EIC:3 input INEN pull=UP
+PA22:  pmux=SERCOM3:0(i2c:sda)
+PA23:  pmux=SERCOM3:1(i2c:scl)
+PA24:  pmux=USB:DN
+PA25:  pmux=USB:DP
+PA27:  output INEN
+PA30:  pmux=SWCLK
+--------------------------- PORT B
+PB03:  output INEN
+PB09:  pmux=ADC:3,Y15
+PB10:  pmux=SERCOM4:2(spi:mosi)
+PB11:  pmux=SERCOM4:3(spi:sck)
+PB30:  output DRVSTR
+```
+
+### void printZeroRegPORT_Arduino(ZeroRegOptions &opts)
+Prints out the `PORT` configuration for the Arduino pins.
+
+example output:
+```text
+--------------------------- ARDUINO PINS
+D0:  pmux=SERCOM0:3(usart:rx)
+D1:  pmux=SERCOM0:2(usart:tx)
+D12:  pmux=EIC:3 input INEN pull=UP
+D13:  output INEN
+A2:  pmux=ADC:3,Y15
+D20:  pmux=SERCOM3:0(i2c:sda)
+D21:  pmux=SERCOM3:1(i2c:scl)
+D22:  pmux=SERCOM4:0(spi:miso)
+D23:  pmux=SERCOM4:2(spi:mosi)
+D24:  pmux=SERCOM4:3(spi:sck)
+D25:  output INEN
 ```
 
 
@@ -207,17 +225,27 @@ Prints out the configuration registers for the `RTC` peripheral.
 example output:
 ```text
 --------------------------- RTC MODE2
-CTRL:  PRESCALER=1024
-READREQ:
+CTRL:  ENABLE PRESCALER=0xA(GCLK_RTC/1024)
 EVCTRL:
-FREQCORR:  0x0
-ALARM:  00-00-00 00:00:00
-MASK:  SS
+FREQCORR:  +0
+ALARM0:  00-00-00 00:00:00
+MASK0:  OFF
 ```
 
 
-### void printZeroRegSBMATRIX(ZeroRegOptions &opts)
-Prints out the configuration registers for the `SBMATRIX` peripheral.
+### void printZeroRegSCS(ZeroRegOptions &opts)
+Prints out the ARM Cortex-M0+ system control space.
+
+example output:
+```text
+--------------------------- SCS
+CPUID:  REV=0x1 PARTNO=0xC60 ARCH=0xC VAR=0x0 IMPL=0x41
+SysTick:  ENABLE TICKINT CLKSOURCE=CPU RELOAD=47999 TENMS=79999 SKEW
+irq pri0:  PM SYSCTRL WDT RTC EIC NVMCTRL DMAC USB EVSYS SERCOM1 SERCOM2 SERCOM5 TCC0 TCC1 TCC2 TC3 TC4 TC5 TC6 TC7 ADC AC DAC PTC I2S
+irq pri1:
+irq pri2:
+irq pri3:  SERCOM0 SERCOM3 SERCOM4
+```
 
 
 ### void printZeroRegSERCOM(ZeroRegOptions &opts, Sercom* sercom, uint8_t idx)
@@ -225,9 +253,18 @@ Prints out the configuration registers for a `SERCOM` peripheral.
 
 example output:
 ```text
---------------------------- SERCOM1 SPI master
-CTRLA:  MISO=PAD3 MOSI=PAD0 SCK=PAD1 FORM=SPI CPHA=LEADING CPOL=LOW DORD=MSB
-CTRLB:  CHSIZE=8bit AMODE=MASK RXEN
+--------------------------- SERCOM0 USART (internal clock)
+CTRLA:  ENABLE SAMPR=0x1 SAMPA=0x0 cmode=ASYNC cpol=RISING dord=MSB form=USART rx=PAD3 tx=PAD2
+CTRLB:  chsize=8bit TXEN RXEN
+BAUD:  0x8138
+--------------------------- SERCOM3 I2C master
+CTRLA:  ENABLE sdahold=DIS speed=SM<100kHz,FM<400kHz inactout=DIS
+CTRLB:  ackact=ACK
+BAUD:  BAUD=0xE8 BAUDLOW=0x0 HSBAUD=0x0 HSBAUDLOW=0x0
+ADDR:  ADDR=0x0 LEN=0x0
+--------------------------- SERCOM4 SPI master
+CTRLA:  ENABLE miso=PAD0 mosi=PAD2 sck=PAD3 form=SPI cpha=LEADING cpol=LOW dord=MSB
+CTRLB:  chsize=8bit amode=MASK RXEN
 BAUD:  0x5
 ```
 
@@ -238,27 +275,90 @@ Prints out the configuration registers for the `SYSCTRL` peripheral.
 example output:
 ```text
 --------------------------- SYSCTRL
-PCLKSR:  XOSC32KRDY OSC8MRDY DFLLRDY DFLLLCKF DFLLLCKC BOD33RDY B33SRDY
-XOSC32K:  XTALEN EN32K RUNSTDBY ONDEMAND STARTUP=2000092us
-OSCULP32K:  CALIB=0x11
-OSC8M:  PRESC=1 CALIB=0x80D FRANGE=8-11MHz
-DFLL:  MODE QLDIS WAITLOCK
-BOD33:  ACTION=RESET PSEL=1 LEVEL=0x7
+OSCULP32K:  CALIB=0x10
+OSC8M:  ENABLE presc=1 CALIB=0x80E frange=8-11MHz
+XOSC32K:  ENABLE XTALEN EN32K RUNSTDBY ONDEMAND STARTUP=0x6
+DFLL:  ENABLE mode=closed-loop QLDIS WAITLOCK MUL=1465
+BOD33:  ENABLE action=RESET psel=2 LEVEL=0x7
 VREG:
 VREF:  CALIB=0x60
 ```
 
 
-### void printZeroRegTC(ZeroRegOptions &opts, Tc* tc, uint8_t idx) -- **NOT YET IMPLEMENTED**
+### void printZeroRegTC(ZeroRegOptions &opts, Tc* tc, uint8_t idx)
 Prints out the configuration registers for a `TC` peripheral.
 
+example output:
+```text
+--------------------------- TC3 COUNT16
+CTRLA:  ENABLE wavegen=NPWM prescaler=DIV1 prescsync=GCLK
+CTRLB:  dir=UP
+CTRLC:
+EVCTRL:  evact=OFF
+CC0:  2304
+CC1:  0
+```
 
-### void printZeroRegTCC(ZeroRegOptions &opts, Tcc* tcc, uint8_t idx) -- **NOT YET IMPLEMENTED**
+
+### void printZeroRegTCC(ZeroRegOptions &opts, Tcc* tcc, uint8_t idx)
 Prints out the configuration registers for a `TCC` peripheral.
 
+example output:
+```text
+--------------------------- TCC2
+CTRLA:  ENABLE resolution=NONE prescaler=DIV1 prescsync=GCLK
+CTRLB:  dir=UP
+FCTRLA:  SRC=0x0 BLANK=0x0 HALT=0x0 chsel=CC0 CAPTURE=0x0 BLANKVAL=0x0 FILTERVAL=0x0
+FCTRLB:  SRC=0x0 BLANK=0x0 HALT=0x0 chsel=CC0 CAPTURE=0x0 BLANKVAL=0x0 FILTERVAL=0x0
+WEXCTRL:  OTMX=0x0 DTLS=0 DTHS=0
+DRVCTRL:  FILTERVAL0=0x0 FILTERVAL1=0x0
+EVCTRL:  EVACT0=0x0 EVACT1=0x0 CNTSEL=0x0
+PATT:  ........
+WAVE:  WAVEGEN=0x2 RAMP=0x0 POL0=0 POL1=0 POL2=0 POL3=0
+PER:  65535
+CC0:  2304
+CC1:  0
+CC2:  0
+CC3:  0
+```
 
-### void printZeroRegUSB(ZeroRegOptions &opts) -- **NOT YET IMPLEMENTED**
+
+### void printZeroRegUSB(ZeroRegOptions &opts)
 Prints out the configuration registers for the `USB` peripheral.
+
+example output:
+```text
+--------------------------- USB
+CTRLA:  ENABLE RUNSTDBY mode=DEVICE
+QOSCTRL:  cqos=LOW dqos=LOW
+CTRLB:  spdconf=FS LPMHDSK=0x0
+DADD:  0x3D ADDEN
+PADCAL:  TRANSP=0x1D TRANSN=0x5 TRIM=0x3
+ENDPOINT0:
+    BANK0:  eptype=CTRL-out ADDR=0x20000D2C size=64byte EXTREG=0x0
+    BANK1:  eptype=CTRL-in ADDR=0x20000B6C size=64byte
+ENDPOINT1:
+    BANK0:  eptype=--disabled--
+    BANK1:  eptype=INT-in ADDR=0x20000BAC size=64byte
+ENDPOINT2:
+    BANK0:  eptype=BULK-out ADDR=0x20001160 size=64byte EXTREG=0x0
+    BANK1:  eptype=--disabled--
+ENDPOINT3:
+    BANK0:  eptype=--disabled--
+    BANK1:  eptype=BULK-in ADDR=0x20000C2C size=64byte
+ENDPOINT4:
+    BANK0:  eptype=--disabled--
+    BANK1:  eptype=--disabled--
+ENDPOINT5:
+    BANK0:  eptype=--disabled--
+    BANK1:  eptype=--disabled--
+ENDPOINT6:
+    BANK0:  eptype=--disabled--
+    BANK1:  eptype=--disabled--
+ENDPOINT7:
+    BANK0:  eptype=--disabled--
+    BANK1:  eptype=--disabled--
+```
 
 
 ### void printZeroRegWDT(ZeroRegOptions &opts)

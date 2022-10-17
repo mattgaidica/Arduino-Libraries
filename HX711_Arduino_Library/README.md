@@ -43,7 +43,7 @@ to be initialized. This won't send the program into a spinlock when the
 scale is disconnected and will probably also account for hardware failures.
 ```
 // 4. Acquire reading without blocking
-if (scale.wait_ready_timeout(1000)) {
+if (loadcell.wait_ready_timeout(1000)) {
     long reading = loadcell.get_units(10);
     Serial.print("Weight: ");
     Serial.println(reading, 2);
@@ -51,6 +51,10 @@ if (scale.wait_ready_timeout(1000)) {
     Serial.println("HX711 not found.");
 }
 ```
+
+
+## FAQ
+https://github.com/bogde/HX711/blob/master/doc/faq.md
 
 
 ## More examples
@@ -64,6 +68,7 @@ See `examples` directory in this repository.
 - [Arduino core for SAMD21](https://github.com/arduino/ArduinoCore-samd) (untested)
 - [Arduino core for SAMD51](https://github.com/adafruit/ArduinoCore-samd) (untested)
 - [Arduino core for STM32](https://github.com/stm32duino/Arduino_Core_STM32)
+- [Arduino Core for Adafruit Bluefruit nRF52 Boards](https://github.com/adafruit/Adafruit_nRF52_Arduino)
 
 
 ## Hardware support
@@ -73,6 +78,7 @@ The library has been tested successfully on the following hardware.
 - [ESP8266]: WeMos D1 mini, Adafruit HUZZAH
 - [ESP32]: ESP32 DEVKIT V1, Heltec WiFi Kit 32, Adafruit Feather HUZZAH32
 - [STM32 F1] ([Cortex-M3]): STM32F103C8T6 STM32 Blue Pill Board
+- [nRF52]: Adafruit Feather nRF52840 Express
 
 Thanks, @bogde and @ClemensGruber!
 
@@ -81,6 +87,7 @@ Thanks, @bogde and @ClemensGruber!
 [ESP32]: https://en.wikipedia.org/wiki/ESP32
 [STM32 F1]: https://en.wikipedia.org/wiki/STM32#STM32_F1
 [Cortex-M3]: https://en.wikipedia.org/wiki/ARM_Cortex-M#Cortex-M3
+[nRF52]: https://infocenter.nordicsemi.com/index.jsp?topic=%2Fstruct_nrf52%2Fstruct%2Fnrf52.html
 
 
 ## Features
@@ -136,16 +143,17 @@ effectively building for all environments defined in `platformio.ini`.
 
 #### Result
 ```
-Environment feather_328	[SUCCESS]
-Environment atmega_2560	[SUCCESS]
-Environment huzzah     	[SUCCESS]
-Environment lopy4      	[SUCCESS]
-Environment teensy31   	[SUCCESS]
-Environment teensy36   	[SUCCESS]
-Environment feather_m0 	[SUCCESS]
-Environment arduino_due	[SUCCESS]
-Environment feather_m4 	[SUCCESS]
-Environment bluepill   	[SUCCESS]
+Environment feather_328                 [SUCCESS]
+Environment atmega_2560	                [SUCCESS]
+Environment huzzah                      [SUCCESS]
+Environment lopy4                       [SUCCESS]
+Environment teensy31                    [SUCCESS]
+Environment teensy36                    [SUCCESS]
+Environment feather_m0                  [SUCCESS]
+Environment arduino_due                 [SUCCESS]
+Environment feather_m4                  [SUCCESS]
+Environment bluepill   	                [SUCCESS]
+Environment adafruit_feather_nrf52840   [SUCCESS]
 ```
 
 #### Details

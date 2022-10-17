@@ -34,7 +34,7 @@ SOFTWARE.
 // This is a wild experiment in API design. The idea is to make it easy to add
 // new configuration options in the future without a long list of arguments.
 struct ZeroRegOptions {
-    Stream  &ser;
+    Print   &out;
     bool    showDisabled;
 };
 
@@ -43,18 +43,17 @@ void printZeroRegAC(ZeroRegOptions &opts);
 void printZeroRegADC(ZeroRegOptions &opts);
 void printZeroRegDAC(ZeroRegOptions &opts);
 void printZeroRegDMAC(ZeroRegOptions &opts);
-void printZeroRegDSU(ZeroRegOptions &opts);
 void printZeroRegEIC(ZeroRegOptions &opts);
 void printZeroRegEVSYS(ZeroRegOptions &opts);
 void printZeroRegGCLK(ZeroRegOptions &opts);
 void printZeroRegI2S(ZeroRegOptions &opts);
-void printZeroRegMTB(ZeroRegOptions &opts);
 void printZeroRegNVMCTRL(ZeroRegOptions &opts);
 void printZeroRegPAC(ZeroRegOptions &opts);
 void printZeroRegPM(ZeroRegOptions &opts);
 void printZeroRegPORT(ZeroRegOptions &opts);
+void printZeroRegPORT_Arduino(ZeroRegOptions &opts);
 void printZeroRegRTC(ZeroRegOptions &opts);
-void printZeroRegSBMATRIX(ZeroRegOptions &opts);
+void printZeroRegSCS(ZeroRegOptions &opts);
 void printZeroRegSERCOM(ZeroRegOptions &opts, Sercom* sercom, uint8_t idx);
 void printZeroRegSYSCTRL(ZeroRegOptions &opts);
 void printZeroRegTC(ZeroRegOptions &opts, Tc* tc, uint8_t idx);
