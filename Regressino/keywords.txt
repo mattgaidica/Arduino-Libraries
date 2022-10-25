@@ -1,0 +1,34 @@
+#######################################
+# Syntax Coloring Map Debug
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+LinearRegression	KEYWORD1
+ExponentialRegression   KEYWORD1
+LogarithmicRegression   KEYWORD1
+PotentialRegression   KEYWORD1
+LogisticRegression   KEYWORD1
+LinearRegression2d  KEYWORD1
+LogisticRegression2d    KEYWORD1
+PolynomialRegression    KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+learn	KEYWORD2
+calculate	KEYWORD2
+correlation	KEYWORD2
+getValues	KEYWORD2
+reset   KEYWORD2
+samples KEYWORD2
+error KEYWORD2
+correlationX1Y KEYWORD2
+correlationX2Y KEYWORD2
+correlationX1X2 KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
