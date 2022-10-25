@@ -22,11 +22,10 @@
 #define ARDUINO_MKRIoTCarrier_Relay
 
 #include "Arduino.h"
-using getRev_t = int (*)();
 
 class MKRIoTCarrier_Relay{
     public: 
-    MKRIoTCarrier_Relay(int index, getRev_t getRev);
+    MKRIoTCarrier_Relay(int pin);
     void begin();
     void open();
     void close();
@@ -34,11 +33,8 @@ class MKRIoTCarrier_Relay{
     int getStatus();
 
     private:
-    int _pin;
+    const int _pin;
     int _status;
-    int _index;
-    int (*board_revision)(void);
-    int _revision;
 };
 
 #endif

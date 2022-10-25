@@ -7,9 +7,11 @@ This library enables the MKR family to use the MKR IoT Carrier
 Get the carrier:
  * [Standalone Board](https://store.arduino.cc/mkr-iot-carrier)  
  * Kits:
-    * [Arduino Explore IoT Kit](https://store.arduino.cc/explore-iot-kit)
-    * [Arduino Oplà IoT Kit](https://store.arduino.cc/opla-iot-kit)
+    * [Explore IoT Kit](https://store.arduino.cc/explore-iot-kit)
+    * [Oplà IoT Kit](https://store.arduino.cc/opla-iot-kit)
  
+
+
 For more information about this library please visit us at
 https://www.arduino.cc/reference/en/libraries/arduino_mkriotcarrier/
 

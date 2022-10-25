@@ -123,27 +123,22 @@ Adafruit_DCMotor *Adafruit_MotorShield::getMotor(uint8_t num) {
     dcmotors[num].motornum = num;
     dcmotors[num].MC = this;
     uint8_t pwm, in1, in2;
-    switch (num) {
-    case 0:
+    if (num == 0) {
       pwm = 8;
       in2 = 9;
       in1 = 10;
-      break;
-    case 1:
+    } else if (num == 1) {
       pwm = 13;
       in2 = 12;
       in1 = 11;
-      break;
-    case 2:
+    } else if (num == 2) {
       pwm = 2;
       in2 = 3;
       in1 = 4;
-      break;
-    default:
+    } else if (num == 3) {
       pwm = 7;
       in2 = 6;
       in1 = 5;
-      break;
     }
     dcmotors[num].PWMpin = pwm;
     dcmotors[num].IN1pin = in1;
@@ -183,7 +178,7 @@ Adafruit_StepperMotor *Adafruit_MotorShield::getStepper(uint16_t steps,
       pwmb = 13;
       bin2 = 12;
       bin1 = 11;
-    } else {
+    } else if (num == 1) {
       pwma = 2;
       ain2 = 3;
       ain1 = 4;
