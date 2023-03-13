@@ -66,11 +66,11 @@ bool PMICClass::begin()
 {
     _wire->begin();
 
-#ifdef ARDUINO_ARCH_SAMD
+#ifdef USE_ARDUINO_MKR_PIN_LAYOUT
     pinMode(PIN_USB_HOST_ENABLE, OUTPUT);
     digitalWrite(PIN_USB_HOST_ENABLE, LOW);
     #if defined(ARDUINO_SAMD_MKRGSM1400) || defined(ARDUINO_SAMD_MKRNB1500)
-      pinMode(PMIC_IRQ_PIN, INPUT_PULLUP);
+    pinMode(PMIC_IRQ_PIN, INPUT_PULLUP);
     #endif
 #endif
 
@@ -90,10 +90,10 @@ bool PMICClass::begin()
  *******************************************************************************/
 void PMICClass::end()
 {
-#ifdef ARDUINO_ARCH_SAMD
+#ifdef USE_ARDUINO_MKR_PIN_LAYOUT
     pinMode(PIN_USB_HOST_ENABLE, INPUT);
     #if defined(ARDUINO_SAMD_MKRGSM1400) || defined(ARDUINO_SAMD_MKRNB1500)
-      pinMode(PMIC_IRQ_PIN, INPUT);
+    pinMode(PMIC_IRQ_PIN, INPUT);
     #endif
 #endif
     _wire->end();
@@ -106,7 +106,7 @@ void PMICClass::end()
  * Return         : 0 on Error, 1 on Success
  *******************************************************************************/
 bool PMICClass::enableCharge() {
-#ifdef ARDUINO_ARCH_SAMD
+#ifdef USE_ARDUINO_MKR_PIN_LAYOUT
     digitalWrite(PIN_USB_HOST_ENABLE, LOW);
 #endif
     int DATA = readRegister(POWERON_CONFIG_REGISTER);
@@ -147,7 +147,7 @@ bool PMICClass::enableCharge() {
 
 /*******************************************************************************
  * Function Name  : enableBoostMode
- * Description    : Enables PMIC boost mode, allow to generate 5V from battery
+ * Description    : Enables PMIC boost mode, allow to generate 5 V from battery
  * Input          : NONE
  * Return         : 0 on Error, 1 on Success
  *******************************************************************************/
@@ -162,9 +162,10 @@ bool PMICClass::enableBoostMode() {
     if (!writeRegister(POWERON_CONFIG_REGISTER, mask | 0x20)) {
         return 0;
     }
-#ifdef ARDUINO_ARCH_SAMD
+#ifdef USE_ARDUINO_MKR_PIN_LAYOUT
     digitalWrite(PIN_USB_HOST_ENABLE, LOW);
 #endif
+
     // Disable Charge Termination Pin
     DATA = readRegister(CHARGE_TIMER_CONTROL_REGISTER);
 
@@ -243,7 +244,7 @@ bool PMICClass::disableCharge() {
 *******************************************************************************/
 bool PMICClass::disableBoostMode() {
   int DATA = readRegister(POWERON_CONFIG_REGISTER);
-#ifdef ARDUINO_ARCH_SAMD
+#ifdef USE_ARDUINO_MKR_PIN_LAYOUT
     digitalWrite(PIN_USB_HOST_ENABLE, HIGH);
 #endif
 
@@ -278,10 +279,10 @@ bool PMICClass::setInputVoltageLimit(float voltage) {
         voltage = 3.88;
     }
 
-    // round(((desired voltage - base_voltage_offset) / minimum_votage_value) * LSB value)
+    // round(((desired voltage - base_voltage_offset) / minimum_voltage_value) * LSB value)
     // where:
     // - BASE_VOLTAGE_OFFSET = 3.88 V;
-    // - minimum_votage_value = 0.008 V (80 mV);
+    // - minimum_voltage_value = 0.008 V (80 mV);
     // - LSB value = 8;
     // after mask with & 0x78 to set only the input voltage bits
     return writeRegister(INPUT_SOURCE_REGISTER, (mask | (round((voltage - 3.88) * 100) & 0x78)));
@@ -543,7 +544,7 @@ bool PMICClass::resetWatchdog() {
 /*******************************************************************************
  * Function Name  : setMinimumSystemVoltage
  * Description    : Set the minimum acceptable voltage to feed the onboard
-                    mcu and module
+                    MCU and module
  * Input          : Minimum system voltage in Volt
  * Return         : 0 Error, 1 Success
 *******************************************************************************/
@@ -887,7 +888,7 @@ bool PMICClass::disableBATFET(void) {
  * Function Name  : enableChargeFaultINT
  * Description    : Enable interrupt during Charge fault
  * Input          : NONE
- * Return         : 0 on Error, 1 on Succes
+ * Return         : 0 on Error, 1 on Success
 *******************************************************************************/
 bool PMICClass::enableChargeFaultINT() {
     int  DATA = readRegister(MISC_CONTROL_REGISTER);
@@ -905,7 +906,7 @@ bool PMICClass::enableChargeFaultINT() {
  * Function Name  : disableChargeFaultINT
  * Description    : Disable interrupt during Charge fault
  * Input          : NONE
- * Return         : 0 on Error, 1 on Succes
+ * Return         : 0 on Error, 1 on Success
 *******************************************************************************/
 bool PMICClass::disableChargeFaultINT() {
     int  DATA = readRegister(MISC_CONTROL_REGISTER);
@@ -923,7 +924,7 @@ bool PMICClass::disableChargeFaultINT() {
  * Function Name  : enableBatFaultINT
  * Description    : Enable interrupt during battery fault
  * Input          : NONE
- * Return         : 0 on Error, 1 on Succes
+ * Return         : 0 on Error, 1 on Success
 *******************************************************************************/
 bool PMICClass::enableBatFaultINT(){
     int  DATA = readRegister(MISC_CONTROL_REGISTER);
@@ -941,7 +942,7 @@ bool PMICClass::enableBatFaultINT(){
  * Function Name  : disableBatFaultINT
  * Description    : Disable interrupt during battery fault
  * Input          : NONE
- * Return         : 0 on Error, 1 on Succes
+ * Return         : 0 on Error, 1 on Success
 *******************************************************************************/
 bool PMICClass::disableBatFaultINT() {
     int  DATA = readRegister(MISC_CONTROL_REGISTER);
@@ -1024,7 +1025,7 @@ bool PMICClass::isPowerGood(void) {
  * Function Name  : isHot
  * Description    : Check if is in Thermal Regulation
  * Input          : NONE
- * Return         : 0 on Nomral state, 1 on Thermal Regulation state
+ * Return         : 0 on Normal state, 1 on Thermal Regulation state
  *******************************************************************************/
 bool PMICClass::isHot(void) {
 
@@ -1087,7 +1088,7 @@ bool PMICClass::isBattConnected(void) {
 }
 
 /*******************************************************************************
- * Function Name  : readSystemStatusRegeister
+ * Function Name  : readSystemStatusRegister
  * Description    : Query the PMIC and returns the System Status Register value
  * Input          : NONE
  * Return         : -1 on Error, System Status Register byte on Success

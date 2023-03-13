@@ -32,6 +32,7 @@
 #include "mbed.h"
 #include "FATFileSystem.h"
 #include "FlashIAPBlockDevice.h"
+#include "utility/ota/FlashSHA256.h"
 
 /******************************************************************************
  * FUNCTION DEFINITION
@@ -247,6 +248,19 @@ int rp2040_connect_onOTARequest(char const * ota_url)
   NVIC_SystemReset();
 
   return static_cast<int>(OTAError::None);
+}
+
+String rp2040_connect_getOTAImageSHA256()
+{
+  /* The maximum size of a RP2040 OTA update image is 1 MByte (that is 1024 *
+   * 1024 bytes or 0x100'000 bytes).
+   */
+  return FlashSHA256::calc(XIP_BASE, 0x100000);
+}
+
+bool rp2040_connect_isOTACapable()
+{
+  return true;
 }
 
 #endif /* ARDUINO_NANO_RP2040_CONNECT */

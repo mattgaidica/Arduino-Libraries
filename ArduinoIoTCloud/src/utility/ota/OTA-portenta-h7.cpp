@@ -29,13 +29,23 @@
 #include <Arduino_Portenta_OTA.h>
 #include <Arduino_ConnectionHandler.h>
 
+#include <stm32h7xx_hal_rtc_ex.h>
+
+#include "tls/utility/SHA256.h"
+
 #include "../watchdog/Watchdog.h"
+
+/******************************************************************************
+ * EXTERN
+ ******************************************************************************/
+
+extern RTC_HandleTypeDef RTCHandle;
 
 /******************************************************************************
  * FUNCTION DEFINITION
  ******************************************************************************/
 
-int portenta_h7_onOTARequest(char const * ota_url, const bool use_ethernet)
+int portenta_h7_onOTARequest(char const * ota_url, NetworkAdapter iface)
 {
   watchdog_reset();
 
@@ -66,7 +76,7 @@ int portenta_h7_onOTARequest(char const * ota_url, const bool use_ethernet)
   /* Download the OTA file from the web storage location. */
   MbedSocketClass * download_socket = static_cast<MbedSocketClass*>(&WiFi);
 #if defined (BOARD_HAS_ETHERNET)
-  if(use_ethernet) {
+  if(iface == NetworkAdapter::ETHERNET) {
     download_socket = static_cast<MbedSocketClass*>(&Ethernet);
   }
 #endif
@@ -94,6 +104,48 @@ int portenta_h7_onOTARequest(char const * ota_url, const bool use_ethernet)
 
   /* Perform the reset to reboot - then the bootloader performs the actual application update. */
   NVIC_SystemReset();
+}
+
+String portenta_h7_getOTAImageSHA256()
+{
+  /* The length of the application can be retrieved the same way it was
+   * communicated to the bootloader, that is by writing to the non-volatile
+   * storage registers of the RTC.
+   */
+  SHA256         sha256;
+  uint32_t const app_start = 0x8040000;
+  uint32_t const app_size  = HAL_RTCEx_BKUPRead(&RTCHandle, RTC_BKP_DR3);
+
+  sha256.begin();
+  uint32_t b = 0;
+  uint32_t bytes_read = 0; for(uint32_t a = app_start;
+                               bytes_read < app_size;
+                               bytes_read += sizeof(b), a += sizeof(b))
+  {
+    /* Read the next chunk of memory. */
+    memcpy(&b, reinterpret_cast<const void *>(a), sizeof(b));
+    /* Feed it to SHA256. */
+    sha256.update(reinterpret_cast<uint8_t *>(&b), sizeof(b));
+  }
+  /* Retrieve the final hash string. */
+  uint8_t sha256_hash[SHA256::HASH_SIZE] = {0};
+  sha256.finalize(sha256_hash);
+  String sha256_str;
+  std::for_each(sha256_hash,
+                sha256_hash + SHA256::HASH_SIZE,
+                [&sha256_str](uint8_t const elem)
+                {
+                  char buf[4];
+                  snprintf(buf, 4, "%02X", elem);
+                  sha256_str += buf;
+                });
+  DEBUG_VERBOSE("SHA256: %d bytes (of %d) read", bytes_read, app_size);
+  return sha256_str;
+}
+
+bool portenta_h7_isOTACapable()
+{
+  return Arduino_Portenta_OTA::isOtaCapable();
 }
 
 #endif /* BOARD_STM32H7 */

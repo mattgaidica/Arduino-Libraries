@@ -1,11 +1,11 @@
 /*
-  Battery charge Interrupt Example
+  Battery Charge Interrupt Example
 
   This example shows how to configure and enable charge mode on Arduino MKR boards
 
   Circuit:
   - Arduino MKR board
-  - 750 mAh lipo battery
+  - 750 mAh LiPo battery
 
   created 21 Aug 2019
   by Riccardo Rizzo
@@ -15,7 +15,7 @@
 
 #include <Arduino_PMIC.h>
 
-volatile unsigned long time_last_interrurpt = millis();
+volatile unsigned long time_last_interrupt = millis();
 
 void setup() {
   Serial.begin(9600);
@@ -23,8 +23,11 @@ void setup() {
     ; // wait for serial port to connect. Needed for native USB port only
   }
 
-  // Attach the PMIC irq pin
+// Available only for MKRGSM1400 and MKRNB1500
+#if defined(ARDUINO_SAMD_MKRGSM1400) || defined(ARDUINO_SAMD_MKRNB1500)
+  // Attach the PMIC IRQ pin
   attachInterrupt(digitalPinToInterrupt(PMIC_IRQ_PIN), batteryConnected, FALLING);
+#endif
 
   if (!PMIC.begin()) {
     Serial.println("Failed to initialize PMIC!");
@@ -51,7 +54,7 @@ void setup() {
   }
 
   // Set the charge current to 375 mA
-  // the charge current should be definde as maximum at (C for hour)/2h
+  // the charge current should be defined as maximum at (C for hour)/2h
   // to avoid battery explosion (for example for a 750mAh battery set to 0.375 A)
   if (!PMIC.setChargeCurrent(0.375)) {
     Serial.println("Error in set charge current");
@@ -60,7 +63,7 @@ void setup() {
 }
 
 void loop() {
-  if (millis() - time_last_interrurpt > 100) {
+  if (millis() - time_last_interrupt > 100) {
     // Enable the Charger
     if (!PMIC.enableCharge()) {
       Serial.println("Error enabling Charge mode");
@@ -72,12 +75,9 @@ void loop() {
 
       // loop until charge is done
       if (PMIC.chargeStatus() != CHARGE_TERMINATION_DONE) {
-        Serial.println("Charge mode");
-        Serial.println(PMIC.isCharging());
         delay(1000);
       } else {
         // Disable the charger
-
         Serial.println("Disable Charge mode");
         if (!PMIC.disableCharge()) {
           Serial.println("Error disabling Charge mode");
@@ -85,7 +85,6 @@ void loop() {
         // if you really want to detach the battery call
         // PMIC.disableBATFET();
         //isbatteryconnected = false;
-
       }
     }
   }
@@ -93,5 +92,5 @@ void loop() {
 }
 
 void batteryConnected() {
-  time_last_interrurpt = millis();
+  time_last_interrupt = millis();
 }

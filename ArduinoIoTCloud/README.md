@@ -14,6 +14,7 @@ The `ArduinoIoTCloud` library is the central element of the firmware enabling ce
 * **GSM**: [`MKR GSM 1400`](https://store.arduino.cc/arduino-mkr-gsm-1400-1415)
 * **5G**: [`MKR NB 1500`](https://store.arduino.cc/arduino-mkr-nb-1500-1413)
 * **LoRa**: [`MKR WAN 1300/1310`](https://store.arduino.cc/mkr-wan-1310)
+* **Ethernet**: [`Portenta H7`](https://store.arduino.cc/products/portenta-h7) + [`Vision Shield Ethernet`](https://store.arduino.cc/products/arduino-portenta-vision-shield-ethernet), [`Max Carrier`](https://store.arduino.cc/products/portenta-max-carrier), [`Breakout`](https://store.arduino.cc/products/arduino-portenta-breakout), [`Portenta Machine Control`](https://store.arduino.cc/products/arduino-portenta-machine-control)
 
 ### How?
 1) Register your Arduino IoT Cloud capable board via [Arduino IoT Cloud](https://create.arduino.cc/iot) (Devices Section).
@@ -88,6 +89,5 @@ OTA is supported by the following boards:
 Support for ESP boards is obtained through a third-party core with some differences and limitations compared to Arduino boards.
 
 - **Authentication scheme**: Board authentication is done through `DEVICE_LOGIN_NAME` and `DEVICE_KEY`, both values are included in the `thingProperties.h` file.
-- **RTC**: RTC support is not included thus each `ArduinoCould.update()` call will lead to an NTP request introducing delay in your `loop()` function. The scheduler widget will not work correctly if connection is lost after configuration.
 - **Watchdog**: Watchdog support is not included.
 - **OTA**: OTA support is not included

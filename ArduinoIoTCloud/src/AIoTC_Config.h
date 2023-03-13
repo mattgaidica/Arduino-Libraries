@@ -102,13 +102,17 @@
   #define OTA_STORAGE_SSU         (0)
 #endif
 
-#if defined(ARDUINO_PORTENTA_H7_M7) || defined(ARDUINO_NICLA_VISION)
+#if defined(ARDUINO_PORTENTA_H7_M7) || defined(ARDUINO_NICLA_VISION) || defined(ARDUINO_OPTA) || defined(ARDUINO_GIGA)
   #define OTA_STORAGE_PORTENTA_QSPI   (1)
 #else
   #define OTA_STORAGE_PORTENTA_QSPI   (0)
 #endif
 
-#if (OTA_STORAGE_SFU || OTA_STORAGE_SSU || OTA_STORAGE_SNU || OTA_STORAGE_PORTENTA_QSPI) && !defined(ARDUINO_AVR_UNO_WIFI_REV2)
+#if defined(ARDUINO_ARCH_ESP32)
+  #define OTA_STORAGE_ESP         (1)
+#endif
+
+#if (OTA_STORAGE_SFU || OTA_STORAGE_SSU || OTA_STORAGE_SNU || OTA_STORAGE_PORTENTA_QSPI || OTA_STORAGE_ESP) && !defined(ARDUINO_AVR_UNO_WIFI_REV2)
   #define OTA_ENABLED             (1)
 #else
   #define OTA_ENABLED             (0)
@@ -116,7 +120,8 @@
 
 #if defined(ARDUINO_SAMD_MKRGSM1400) || defined(ARDUINO_SAMD_MKR1000) ||   \
   defined(ARDUINO_SAMD_MKRNB1500) || defined(ARDUINO_PORTENTA_H7_M7)      ||   \
-  defined (ARDUINO_NANO_RP2040_CONNECT)
+  defined (ARDUINO_NANO_RP2040_CONNECT) || defined(ARDUINO_OPTA) || \
+  defined(ARDUINO_GIGA)
   #define BOARD_HAS_ECCX08
   #define HAS_TCP
 #endif
@@ -141,7 +146,7 @@
   #define HAS_TCP
 #endif
 
-#if defined(ARDUINO_PORTENTA_H7_M7) || defined(ARDUINO_NICLA_VISION)
+#if defined(ARDUINO_PORTENTA_H7_M7) || defined(ARDUINO_NICLA_VISION) || defined(ARDUINO_OPTA) || defined(ARDUINO_GIGA)
   #define BOARD_STM32H7
 #endif
 
@@ -162,6 +167,6 @@
 #define AIOT_CONFIG_RP2040_OTA_HTTP_HEADER_RECEIVE_TIMEOUT_ms   (10*1000UL)
 #define AIOT_CONFIG_RP2040_OTA_HTTP_DATA_RECEIVE_TIMEOUT_ms   (4*60*1000UL)
 
-#define AIOT_CONFIG_LIB_VERSION "1.8.0"
+#define AIOT_CONFIG_LIB_VERSION "1.11.0"
 
 #endif /* ARDUINO_AIOTC_CONFIG_H_ */

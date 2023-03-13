@@ -201,7 +201,6 @@ class ArduinoIoTCloudTCP: public ArduinoIoTCloudClass
     int write(String const topic, byte const data[], int const length);
 
 #if OTA_ENABLED
-    void onOTARequest();
     void sendDevicePropertyToCloud(String const name);
 #endif
 

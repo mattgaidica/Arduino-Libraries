@@ -263,7 +263,7 @@ pressure = carrier.Pressure.readPressure()
 ```
 
 ### IMU - LSM6DS3
-Visit our reference about [LSM6DS3](https://www.arduino.cc/en/Reference/Arduino_LSM6DS3)
+Visit our reference about [LSM6DS3](https://www.arduino.cc/reference/en/libraries/arduino_lsm6ds3/)
 
 **Syntax Example**
 ```cpp
@@ -346,7 +346,7 @@ Saves the selected color to print the text until the color is changed again
 ```cpp
     display.setTextSize(size)
 ```
-Sets the size of the text that is gonna be printed
+Sets the size of the text that is going to be printed
 
 ```cpp
    display.setTextWrap(True/False)

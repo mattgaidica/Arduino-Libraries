@@ -24,6 +24,10 @@
 
 #include <AIoTC_Config.h>
 
+#if OTA_ENABLED
+#include <Arduino.h>
+#include <Arduino_ConnectionHandler.h>
+
 /******************************************************************************
  * DEFINES
  ******************************************************************************/
@@ -51,19 +55,19 @@ enum class OTAError : int
 };
 
 /******************************************************************************
- * FUNCTION DEFINITION
+ * CLASS DECLARATION
  ******************************************************************************/
 
-#ifdef ARDUINO_ARCH_SAMD
-int samd_onOTARequest(char const * ota_url);
-#endif
+class OTA
+{
+public:
 
-#ifdef ARDUINO_NANO_RP2040_CONNECT
-int rp2040_connect_onOTARequest(char const * ota_url);
-#endif
+  static int onRequest(String url, NetworkAdapter iface);
+  static String getImageSHA256();
+  static bool isCapable();
 
-#ifdef BOARD_STM32H7
-int portenta_h7_onOTARequest(char const * ota_url, const bool use_ethernet);
-#endif
+};
+
+#endif /* OTA_ENABLED */
 
 #endif /* ARDUINO_OTA_LOGIC_H_ */
