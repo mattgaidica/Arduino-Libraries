@@ -38,6 +38,10 @@
   #include "RTCMillis.h"
 #endif
 
+#ifdef ARDUINO_ARCH_RENESAS
+  #include "RTC.h"
+#endif
+
 /**************************************************************************************
  * GLOBAL VARIABLES
  **************************************************************************************/
@@ -86,13 +90,24 @@ void esp8266_setRTC(unsigned long time);
 unsigned long esp8266_getRTC();
 #endif
 
+#ifdef ARDUINO_ARCH_RENESAS
+void renesas_initRTC();
+void renesas_setRTC(unsigned long time);
+unsigned long renesas_getRTC();
+#endif
+
+/**************************************************************************************
+ * DEFINES
+ **************************************************************************************/
+
+#define EPOCH_AT_COMPILE_TIME cvt_time(__DATE__)
+
 /**************************************************************************************
  * CONSTANTS
  **************************************************************************************/
 
 /* Default NTP synch is scheduled each 24 hours from startup */
 static time_t const TIMESERVICE_NTP_SYNC_TIMEOUT_ms = DAYS * 1000;
-static time_t const EPOCH_AT_COMPILE_TIME = cvt_time(__DATE__);
 static time_t const EPOCH = 0;
 
 /**************************************************************************************
@@ -330,8 +345,10 @@ void TimeServiceClass::initRTC()
   stm32h7_initRTC();
 #elif defined (ARDUINO_ARCH_ESP32)
   esp32_initRTC();
-#elif ARDUINO_ARCH_ESP8266
+#elif defined (ARDUINO_ARCH_ESP8266)
   esp8266_initRTC();
+#elif defined (ARDUINO_ARCH_RENESAS)
+  renesas_initRTC();
 #else
   #error "RTC not available for this architecture"
 #endif
@@ -347,8 +364,10 @@ void TimeServiceClass::setRTC(unsigned long time)
   stm32h7_setRTC(time);
 #elif defined (ARDUINO_ARCH_ESP32)
   esp32_setRTC(time);
-#elif ARDUINO_ARCH_ESP8266
+#elif defined (ARDUINO_ARCH_ESP8266)
   esp8266_setRTC(time);
+#elif defined (ARDUINO_ARCH_RENESAS)
+  renesas_setRTC(time);
 #else
   #error "RTC not available for this architecture"
 #endif
@@ -364,8 +383,10 @@ unsigned long TimeServiceClass::getRTC()
   return stm32h7_getRTC();
 #elif defined (ARDUINO_ARCH_ESP32)
   return esp32_getRTC();
-#elif ARDUINO_ARCH_ESP8266
+#elif defined (ARDUINO_ARCH_ESP8266)
   return esp8266_getRTC();
+#elif defined (ARDUINO_ARCH_RENESAS)
+  return renesas_getRTC();
 #else
   #error "RTC not available for this architecture"
 #endif
@@ -377,32 +398,38 @@ unsigned long TimeServiceClass::getRTC()
 
 time_t cvt_time(char const * time)
 {
-  char s_month[5];
-  int month, day, year;
-  struct tm t =
-  {
-    0 /* tm_sec   */,
-    0 /* tm_min   */,
-    0 /* tm_hour  */,
-    0 /* tm_mday  */,
-    0 /* tm_mon   */,
-    0 /* tm_year  */,
-    0 /* tm_wday  */,
-    0 /* tm_yday  */,
-    0 /* tm_isdst */
-  };
-  static const char month_names[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  static time_t build_time = 0;
 
-  sscanf(time, "%s %d %d", s_month, &day, &year);
+  if (!build_time) {
+    char s_month[5];
+    int month, day, year;
+    struct tm t =
+    {
+      0 /* tm_sec   */,
+      0 /* tm_min   */,
+      0 /* tm_hour  */,
+      0 /* tm_mday  */,
+      0 /* tm_mon   */,
+      0 /* tm_year  */,
+      0 /* tm_wday  */,
+      0 /* tm_yday  */,
+      0 /* tm_isdst */
+    };
+    static const char month_names[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
 
-  month = (strstr(month_names, s_month) - month_names) / 3;
+    sscanf(time, "%s %d %d", s_month, &day, &year);
 
-  t.tm_mon = month;
-  t.tm_mday = day;
-  t.tm_year = year - 1900;
-  t.tm_isdst = -1;
+    month = (strstr(month_names, s_month) - month_names) / 3;
 
-  return mktime(&t);
+    t.tm_mon = month;
+    t.tm_mday = day;
+    t.tm_year = year - 1900;
+    t.tm_isdst = -1;
+
+    build_time = mktime(&t);
+  }
+
+  return build_time;
 }
 
 #ifdef ARDUINO_ARCH_SAMD
@@ -488,6 +515,26 @@ void esp8266_setRTC(unsigned long time)
 unsigned long esp8266_getRTC()
 {
   return rtc.get();
+}
+#endif
+
+#ifdef ARDUINO_ARCH_RENESAS
+void renesas_initRTC()
+{
+  RTC.begin();
+}
+
+void renesas_setRTC(unsigned long time)
+{
+  RTCTime t(time);
+  RTC.setTime(t);
+}
+
+unsigned long renesas_getRTC()
+{
+  RTCTime t;
+  RTC.getTime(t);
+  return t.getUnixTime();
 }
 #endif
 

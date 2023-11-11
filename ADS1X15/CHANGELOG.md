@@ -5,19 +5,40 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
+## [0.3.13] - 2023-09-20
+- fix #61 ESP32 begin()
+
+
+## [0.3.12] - 2023-09-11
+- update and add examples
+- add **getLastRequest()** to track last type of measurement.
+- update readme.md
+- minor edits.
+
+
+## [0.3.11] - 2023-08-31
+- update readme.md
+- move code from .h to .cpp
+- reordered code in .cpp to follow .h
+- minor edits
+
+## [0.3.10] - 2023-06-07
+- fix NANO RP2040
+- update and add examples
+- minor edits
+
 ## [0.3.9] - 2023-01-21
 - update GitHub actions
 - update license 2023
 - update readme.md
 - minor edits
 
-
 ## [0.3.8] - 2022-10-17
 - add RP2040 support (kudos to intubun)
 - simplified changelog.md
 
 ## [0.3.7] - 2022-06-21
-- fix ESP32 Wire.begin datatype
+- fix ESP32 Wire.begin data type
 
 ## [0.3.6] - 2022-03-10
 

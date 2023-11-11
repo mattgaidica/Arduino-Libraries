@@ -1,17 +1,18 @@
 //
 //    FILE: ADS_performance.ino
 //  AUTHOR: Rob.Tillaart
-// VERSION: 0.1.1
 // PURPOSE: read analog input
-//
+//     URL: https://github.com/RobTillaart/ADS1X15
 
-// test
-// connect 1 potmeter
+//  test
+//  connect 1 potmeter
 //
-// GND ---[   x   ]------ 5V
-//            |
+//  GND ---[   x   ]------ 5V
+//             |
 //
-// measure at x (connect to AIN0).
+//  measure at x (connect to AIN0).
+//
+//  https://github.com/RobTillaart/ADS1X15/issues/53
 
 
 #include "ADS1X15.h"
@@ -38,10 +39,14 @@ void setup()
   Serial.println(ADS1X15_LIB_VERSION);
 
   ADS.begin();
+
+  Wire.setClock(100000);
+
   ADS.setGain(0);  // 6.144 volt
 
   for (int dr = 0; dr < 8; dr++)
   {
+    //  0 = slow   4 = medium   7 = fast
     ADS.setDataRate(dr);
     Serial.print("DR:\t");
     Serial.println(dr);
@@ -75,7 +80,10 @@ void test_single_shot()
   }
   d1 = micros() - start;
   Serial.print("\t");
-  Serial.println(d1);
+  Serial.print(d1);                  //  TIME (us)
+  Serial.print("\t\t");
+  Serial.println(100000000.0 / d1);  //  SPS
+  delay(100);
 }
 
 
@@ -92,9 +100,12 @@ void test_continuous()
   }
   d2 = micros() - start;
   Serial.print("\t\t");
-  Serial.println(d2);
+  Serial.print(d2);                  //  TIME (us)
+  Serial.print("\t\t");
+  Serial.println(100000000.0 / d2);  //  SPS
+  delay(100);
 }
 
 
-// -- END OF FILE --
+//  -- END OF FILE --
 

@@ -108,7 +108,7 @@
   #define OTA_STORAGE_PORTENTA_QSPI   (0)
 #endif
 
-#if defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_UNOR4_WIFI)
   #define OTA_STORAGE_ESP         (1)
 #endif
 
@@ -126,7 +126,7 @@
   #define HAS_TCP
 #endif
 
-#if defined(ARDUINO_NICLA_VISION)
+#if defined(ARDUINO_NICLA_VISION) || defined(ARDUINO_PORTENTA_C33)
   #define BOARD_HAS_SE050
   #define HAS_TCP
 #endif
@@ -141,13 +141,19 @@
   #define HAS_LORA
 #endif
 
-#if defined(ARDUINO_ESP8266_ESP12) || defined(ARDUINO_ARCH_ESP32) || defined(ESP8266) || defined(ESP32)
+#if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)
   #define BOARD_ESP
+  #define BOARD_HAS_SECRET_KEY
   #define HAS_TCP
 #endif
 
 #if defined(ARDUINO_PORTENTA_H7_M7) || defined(ARDUINO_NICLA_VISION) || defined(ARDUINO_OPTA) || defined(ARDUINO_GIGA)
   #define BOARD_STM32H7
+#endif
+
+#if defined(ARDUINO_UNOR4_WIFI)
+  #define BOARD_HAS_SECRET_KEY
+  #define HAS_TCP
 #endif
 
 /******************************************************************************
@@ -167,6 +173,6 @@
 #define AIOT_CONFIG_RP2040_OTA_HTTP_HEADER_RECEIVE_TIMEOUT_ms   (10*1000UL)
 #define AIOT_CONFIG_RP2040_OTA_HTTP_DATA_RECEIVE_TIMEOUT_ms   (4*60*1000UL)
 
-#define AIOT_CONFIG_LIB_VERSION "1.11.0"
+#define AIOT_CONFIG_LIB_VERSION "1.12.2"
 
 #endif /* ARDUINO_AIOTC_CONFIG_H_ */

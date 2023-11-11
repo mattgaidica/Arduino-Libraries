@@ -1,8 +1,8 @@
 #pragma once
 //
-//    FILE: ADS1X15.H
+//    FILE: ADS1X15.h
 //  AUTHOR: Rob Tillaart
-// VERSION: 0.3.9
+// VERSION: 0.3.13
 //    DATE: 2013-03-24
 // PUPROSE: Arduino library for ADS1015 and ADS1115
 //     URL: https://github.com/RobTillaart/ADS1X15
@@ -12,7 +12,7 @@
 #include "Arduino.h"
 #include "Wire.h"
 
-#define ADS1X15_LIB_VERSION               (F("0.3.9"))
+#define ADS1X15_LIB_VERSION               (F("0.3.13"))
 
 //  allow compile time default address
 //  address in { 0x48, 0x49, 0x4A, 0x4B }, no test...
@@ -38,10 +38,8 @@ public:
 
 #if defined (ESP8266) || defined(ESP32)
   bool     begin(int sda, int scl);
-#endif
-
-#if defined (ARDUINO_ARCH_RP2040)
-  bool    begin(int sda, int scl);
+#elif defined (ARDUINO_ARCH_RP2040) && !defined(__MBED__)
+  bool     begin(int sda, int scl);
 #endif
 
   bool     begin();
@@ -80,6 +78,7 @@ public:
   int16_t  readADC_Differential_0_1();
 
   //  used by continuous mode and async mode.
+  [[deprecated("Use getValue() instead")]]
   int16_t  getLastValue() { return getValue(); };  // will be obsolete in the future 0.4.0
   int16_t  getValue();
 
@@ -93,28 +92,34 @@ public:
   bool     isReady();
 
 
+  //  returns a pin 0x0[0..3] or 
+  //          a differential "mode" 0x[pin second][pin first] or
+  //          0xFF (no request / invalid request)
+  uint8_t   lastRequest();
+
+
   //  COMPARATOR
   //  0    = TRADITIONAL   > high          => on      < low   => off
   //  else = WINDOW        > high or < low => on      between => off
-  void     setComparatorMode(uint8_t mode) { _compMode = mode == 0 ? 0 : 1; };
-  uint8_t  getComparatorMode()             { return _compMode; };
+  void     setComparatorMode(uint8_t mode);
+  uint8_t  getComparatorMode();
 
   //  0    = LOW (default)
   //  else = HIGH
-  void     setComparatorPolarity(uint8_t pol) { _compPol = pol ? 0 : 1; };
-  uint8_t  getComparatorPolarity()            { return _compPol; };
+  void     setComparatorPolarity(uint8_t pol);
+  uint8_t  getComparatorPolarity();
 
   //  0    = NON LATCH
   //  else = LATCH
-  void     setComparatorLatch(uint8_t latch) { _compLatch = latch ? 0 : 1; };
-  uint8_t  getComparatorLatch()              { return _compLatch; };
+  void     setComparatorLatch(uint8_t latch);
+  uint8_t  getComparatorLatch();
 
   //  0   = trigger alert after 1 conversion
   //  1   = trigger alert after 2 conversions
   //  2   = trigger alert after 4 conversions
   //  3   = Disable comparator =  default, also for all other values.
-  void     setComparatorQueConvert(uint8_t mode) { _compQueConvert = (mode < 3) ? mode : 3; };
-  uint8_t  getComparatorQueConvert()             { return _compQueConvert; };
+  void     setComparatorQueConvert(uint8_t mode);
+  uint8_t  getComparatorQueConvert();
 
   void     setComparatorThresholdLow(int16_t lo);
   int16_t  getComparatorThresholdLow();
@@ -130,6 +135,7 @@ public:
   //  proto - getWireClock returns the value set by setWireClock
   //  not necessary the actual value
   uint32_t getWireClock();
+
 
 protected:
   ADS1X15();
@@ -162,6 +168,11 @@ protected:
   uint8_t  _compPol;
   uint8_t  _compLatch;
   uint8_t  _compQueConvert;
+
+  //  variable to track the last pin requested, 
+  //  to allow for round robin query of
+  //  pins based on this state == if no last request then == 0xFFFF.
+  uint16_t  _lastRequest;
 
   int16_t  _readADC(uint16_t readmode);
   void     _requestADC(uint16_t readmode);

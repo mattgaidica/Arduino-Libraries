@@ -39,6 +39,10 @@
   #include "tls/utility/CryptoUtil.h"
 #endif
 
+#ifdef ARDUINO_ARCH_ESP32
+  #include "tls/AIoTCUPCert.h"
+#endif
+
 #if OTA_ENABLED
   #include "utility/ota/OTA.h"
 #endif
@@ -86,7 +90,7 @@ ArduinoIoTCloudTCP::ArduinoIoTCloudTCP()
 #ifdef BOARD_HAS_ECCX08
 , _sslClient(nullptr, ArduinoIoTCloudTrustAnchor, ArduinoIoTCloudTrustAnchor_NUM, getTime)
 #endif
-  #ifdef BOARD_ESP
+  #ifdef BOARD_HAS_SECRET_KEY
 , _password("")
   #endif
 , _mqttClient{nullptr}
@@ -166,14 +170,21 @@ int ArduinoIoTCloudTCP::begin(bool const enable_watchdog, String brokerAddress, 
 
 #if defined(BOARD_HAS_ECCX08)
   _sslClient.setClient(_connection->getClient());
+#elif defined(ARDUINO_PORTENTA_C33)
+  _sslClient.setClient(_connection->getClient());
+  _sslClient.setCACert(AIoTSSCert);
 #elif defined(BOARD_HAS_SE050)
   _sslClient.appendCustomCACert(AIoTSSCert);
 #elif defined(BOARD_ESP)
+  #if defined(ARDUINO_ARCH_ESP8266)
   _sslClient.setInsecure();
+  #else
+  _sslClient.setCACertBundle(x509_crt_bundle);
+  #endif
 #endif
 
   _mqttClient.setClient(_sslClient);
-#ifdef BOARD_ESP
+#ifdef BOARD_HAS_SECRET_KEY
   _mqttClient.setUsernamePassword(getDeviceId(), _password);
 #endif
   _mqttClient.onMessage(ArduinoIoTCloudTCP::onMessage);
@@ -323,6 +334,12 @@ ArduinoIoTCloudTCP::State ArduinoIoTCloudTCP::handle_ConnectMqttBroker()
   unsigned long reconnection_retry_delay = (1 << _last_connection_attempt_cnt) * AIOT_CONFIG_RECONNECTION_RETRY_DELAY_ms;
   reconnection_retry_delay = min(reconnection_retry_delay, static_cast<unsigned long>(AIOT_CONFIG_MAX_RECONNECTION_RETRY_DELAY_ms));
   _next_connection_attempt_tick = millis() + reconnection_retry_delay;
+
+#if defined(ARDUINO_UNOWIFIR4)
+    if (String(WiFi.firmwareVersion()) < String("0.2.0")) {
+      DEBUG_ERROR("ArduinoIoTCloudTCP::%s In order to connect to Arduino IoT Cloud, WiFi firmware needs to be >= 0.2.0, current %s", __FUNCTION__, WiFi.firmwareVersion());
+    }
+#endif
 
   DEBUG_ERROR("ArduinoIoTCloudTCP::%s could not connect to %s:%d", __FUNCTION__, _brokerAddress.c_str(), _brokerPort);
   DEBUG_ERROR("ArduinoIoTCloudTCP::%s %d connection attempt at tick time %d", __FUNCTION__, _last_connection_attempt_cnt, _next_connection_attempt_tick);

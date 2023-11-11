@@ -2,8 +2,11 @@
 [![Arduino CI](https://github.com/RobTillaart/ADS1X15/workflows/Arduino%20CI/badge.svg)](https://github.com/marketplace/actions/arduino_ci)
 [![Arduino-lint](https://github.com/RobTillaart/ADS1X15/actions/workflows/arduino-lint.yml/badge.svg)](https://github.com/RobTillaart/ADS1X15/actions/workflows/arduino-lint.yml)
 [![JSON check](https://github.com/RobTillaart/ADS1X15/actions/workflows/jsoncheck.yml/badge.svg)](https://github.com/RobTillaart/ADS1X15/actions/workflows/jsoncheck.yml)
+[![GitHub issues](https://img.shields.io/github/issues/RobTillaart/ADS1X15.svg)](https://github.com/RobTillaart/ADS1X15/issues)
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/RobTillaart/ADS1X15/blob/master/LICENSE)
 [![GitHub release](https://img.shields.io/github/release/RobTillaart/ADS1X15.svg?maxAge=3600)](https://github.com/RobTillaart/ADS1X15/releases)
+[![PlatformIO Registry](https://badges.registry.platformio.org/packages/robtillaart/library/ADS1X15.svg)](https://registry.platformio.org/libraries/robtillaart/ADS1X15)
 
 
 # ADS1X15
@@ -29,9 +32,18 @@ although not all sensors support all functionality.
 |  ADS1115  |      4     |       16     |    860    |       Y      |        Y      |  Tested  |
 
 
-As the 1015 and the 1115 are both 4 channels these are the most
+As the ADS1015 and the ADS1115 are both 4 channels these are the most
 interesting from functionality point of view as these can also do
-differential measurement.
+differential measurements.
+
+
+#### Related
+
+- https://github.com/RobTillaart/MCP_ADC  (10 & 12 bit ADC, SPI, fast)
+- https://github.com/RobTillaart/PCF8591  (8 bit ADC + 1 bit DAC)
+
+
+## I2C Address
 
 The address of the ADS1113/4/5 is determined by to which pin the **ADDR**
 is connected to:
@@ -46,9 +58,13 @@ is connected to:
 
 ## Interface
 
-### Initializing
+```cpp
+#include "ADS1X15.h"
+```
 
-To initialize the library you must call constructor as described below.
+#### Initializing
+
+To initialize the library you must call a constructor as described below.
 
 - **ADS1x15()** base constructor, should not be used.
 - **ADS1013(uint8_t address, TwoWire \*wire = &Wire)** Constructor with device address,
@@ -87,7 +103,7 @@ void begin() {
 ```
 
 
-### I2C clock speed
+#### I2C clock speed
 
 The function **void setWireClock(uint32_t speed = 100000)** is used to set the clock speed
 in Hz of the used I2C interface. typical value is 100 KHz.
@@ -101,10 +117,10 @@ better the Arduino Wire lib should support this call (ESP32 does).
 
 See - https://github.com/arduino/Arduino/issues/11457
 
-Question: should this functionality be in this library?
+Question: Should this functionality be in this library?
 
 
-### Programmable Gain
+#### Programmable Gain
 
 - **void setGain(uint8_t gain)** set the gain value, indicating the maxVoltage that can be measured
 Adjusting the gain allowing to make more precise measurements.
@@ -138,7 +154,7 @@ Check the [examples](https://github.com/RobTillaart/ADS1X15/blob/master/examples
 ```
 
 
-### Operational mode
+#### Operational mode
 
 The ADS sensor can operate in single shot or continuous mode.
 Depending on how often conversions needed you can tune the mode.
@@ -147,7 +163,7 @@ Note: the mode is not set in the device until an explicit read/request of the AD
 - **uint8_t getMode()** returns current mode 0 or 1, or ADS1X15_INVALID_MODE = 0xFE.
 
 
-### Data rate
+#### Data rate
 
 - **void setDataRate(uint8_t dataRate)** Data rate depends on type of device.
 For all devices the index 0..7 can be used, see table below.
@@ -172,7 +188,7 @@ Data rate in samples per second, based on datasheet is described on table below.
 |     7       |   3300    |    860    |  fastest  |
 
 
-### ReadADC Single mode
+#### ReadADC Single mode
 
 Reading the ADC is very straightforward, the **readADC()** function handles all in one call.
 Under the hood it uses the asynchronous calls.
@@ -221,7 +237,7 @@ in terms of code
 See [examples](https://github.com/RobTillaart/ADS1X15/blob/master/examples/ADS_read_async/ADS_read_async.ino).
 
 
-## ReadADC Differential
+#### ReadADC Differential
 
 For reading the ADC in a differential way there are 4 calls possible.
 
@@ -250,7 +266,39 @@ After one of these calls you need to call
 See [examples](https://github.com/RobTillaart/ADS1X15/blob/master/examples/ADS_differential/ADS_differential.ino).
 
 
-### ReadADC continuous mode
+#### lastRequestMode
+
+Since 0.3.12 the library tracks the last request mode, single pin or differential.
+This variable is set at the moment of request, and keeps its value until a new 
+request is made. This implies that the value / request can be quite old.
+
+Values >= 0x10 are differential, values < 0x10 are single pin. 
+
+- **uint8_t lastRequest()** returns one of the values below.
+
+|  Value  |  Description                 |  Notes  |
+|:-------:|:-----------------------------|:--------|
+|  0xFF   |  no (invalid) request made   |  after call constructor.
+|  0x00   |  single pin 0                |
+|  0x01   |  single pin 1                |
+|  0x02   |  single pin 2                |
+|  0x03   |  single pin 3                |
+|  0x10   |  differential pin 1 0        |
+|  0x30   |  differential pin 3 0        |
+|  0x31   |  differential pin 3 1        |
+|  0x32   |  differential pin 3 2        |
+
+
+Please note that (for now) the function does not support a descriptive return value
+for the following two requests:
+- **readADC_Differential_0_2()** ADS1x15 only - in software (no async equivalent)
+- **readADC_Differential_1_2()** ADS1x15 only - in software (no async equivalent)
+
+As these are emulated in software by two single pin calls, the state would be 
+one of the two single pin values.
+
+
+#### ReadADC continuous mode
 
 To use the continuous mode you need call three functions:
 - **void setMode(0)** 0 = CONTINUOUS, 1 = SINGLE (default).
@@ -283,7 +331,28 @@ Instead you can configure the threshold registers to allow the **ALERT/RDY**
 pin to trigger an interrupt signal when conversion data ready.
 
 
-### Threshold registers
+#### Switching mode or channel during continuous mode
+
+When switching the operating mode or the ADC channel in continuous mode, be aware that 
+the device will always finish the running conversion.
+This implies that after switching the mode or channel the first sample you get is probably 
+the last sample with the previous settings, e.g. channel.
+This might be a problem for your project as this value can be in an "unexpected" range (outlier).
+
+The robust way to change mode or channel therefore seems to be:
+
+1. stop continuous mode,
+1. wait for running conversion to be ready,
+1. reject the last conversion or process it "under old settings",
+1. change the settings,
+1. restart (continuous mode) with the new settings.
+
+This explicit stop takes extra time, however it should prevent "incorrect" readings.
+
+(need to be verified with different models)
+
+
+#### Threshold registers
 
 If the thresholdHigh is set to 0x0100 and the thresholdLow to 0x0000
 the **ALERT/RDY** pin is triggered when a conversion is ready.
@@ -296,7 +365,7 @@ the **ALERT/RDY** pin is triggered when a conversion is ready.
 See [examples](https://github.com/RobTillaart/ADS1X15/blob/master/examples/ADS_read_RDY/ADS_read_RDY.ino).
 
 
-## Comparator
+#### Comparator
 
 Please read Page 15 of the datasheet as the behaviour of the
 comparator is not trivial.
@@ -305,7 +374,7 @@ NOTE: all comparator settings are copied to the device only after calling
 **readADC()** or **requestADC()** functions.
 
 
-### Comparator Mode
+#### Comparator Mode
 
 When configured as a **TRADITIONAL** comparator, the **ALERT/RDY** pin asserts
 (active low by default) when conversion data exceed the limit set in the
@@ -326,7 +395,7 @@ the high threshold register or falls below the low threshold register.
 In this mode the alert is held if the **LATCH** is set. This is similar as above.
 
 
-### Polarity
+#### Polarity
 
 Default state of the **ALERT/RDY** pin is **LOW**, can be to set **HIGH**.
 
@@ -335,7 +404,7 @@ Flag is only explicitly set after a **readADC()** or a **requestADC()**
 - **uint8_t getComparatorPolarity()** returns value set.
 
 
-### Latch
+#### Latch
 
 Holds the **ALERT/RDY** to **HIGH** (or **LOW** depending on polarity) after triggered
 even if actual value has been 'restored to normal' value.
@@ -344,7 +413,7 @@ even if actual value has been 'restored to normal' value.
 - **uint8_t getComparatorLatch()** returns value set.
 
 
-### QueConvert
+#### QueConvert
 
 Set the number of conversions before trigger activates.
 The **void setComparatorQueConvert(uint8_t mode)** is used to set the number of
@@ -362,7 +431,7 @@ A value of 3 (or above) effectively disables the comparator. See table below.
 |    3    |  Disable comparator                 |  default  |
 
 
-### Threshold registers comparator mode
+#### Threshold registers comparator mode
 
 Depending on the comparator mode **TRADITIONAL** or **WINDOW** the thresholds registers
 mean something different see - Comparator Mode above or datasheet.
@@ -373,11 +442,11 @@ mean something different see - Comparator Mode above or datasheet.
 - **int16_t getComparatorThresholdHigh()** reads value from device.
 
 
-### RP2040 specific
+## RP2040 specific
 
 - **bool begin(int sda, int scl)** begin communication with the ADC.
 It has the parameter for selecting on which pins the communication should happen.
-wireUsed is optional. Check RP2040 Pinout for compatible pins.
+Check RP2040 Pinout for compatible pins.
 If, "Wire1" is used, you need to add "&Wire1" in the constructor.
 
 
@@ -386,19 +455,33 @@ If, "Wire1" is used, you need to add "&Wire1" in the constructor.
 #### Must
 
 - Improve documentation (always)
-- move code from .h to .cpp  (0.4.0)
 
 
 #### Should
 
+- investigate of remove the begin(sda, scl) versions 
+  as the responsibility for the Wire configuration 
+  should not be in this library. 
+
 
 #### Could
 
-- More examples ?
+- More examples
 - SMB alert command (00011001) on I2C bus?
-- constructor for ADS1X15 ?
+- sync order .h / .cpp
+
 
 #### Wont (unless requested)
 
 - type flag?
+- constructor for ADS1X15? No as all types are supported.
+
+
+## Support
+
+If you appreciate my libraries, you can support the development and maintenance.
+Improve the quality of the libraries by providing issues and Pull Requests, or
+donate through PayPal or GitHub sponsors.
+
+Thank you,
 

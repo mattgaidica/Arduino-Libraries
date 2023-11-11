@@ -1,7 +1,7 @@
 //
 //    FILE: ADS1X15.cpp
 //  AUTHOR: Rob Tillaart
-// VERSION: 0.3.9
+// VERSION: 0.3.13
 //    DATE: 2013-03-24
 // PUPROSE: Arduino library for ADS1015 and ADS1115
 //     URL: https://github.com/RobTillaart/ADS1X15
@@ -136,21 +136,21 @@ void ADS1X15::reset()
   _compPol        = 1;
   _compLatch      = 0;
   _compQueConvert = 3;
+  _lastRequest    = 0xFFFF;  //  no request yet
 }
 
 
 #if defined (ESP8266) || defined(ESP32)
+
 bool ADS1X15::begin(int sda, int scl)
 {
-  _wire = &Wire;
   _wire->begin(sda, scl);
   if ((_address < 0x48) || (_address > 0x4B)) return false;
   if (! isConnected()) return false;
   return true;
 }
-#endif
 
-#if defined (ARDUINO_ARCH_RP2040)
+#elif defined (ARDUINO_ARCH_RP2040) && !defined(__MBED__)
 
 bool ADS1X15::begin(int sda, int scl)
 {
@@ -170,19 +170,6 @@ bool ADS1X15::begin()
   if ((_address < 0x48) || (_address > 0x4B)) return false;
   if (! isConnected()) return false;
   return true;
-}
-
-
-bool ADS1X15::isBusy()
-{
-  return isReady() == false;
-}
-
-
-bool ADS1X15::isReady()
-{
-  uint16_t val = _readRegister(_address, ADS1X15_REG_CONFIG);
-  return ((val & ADS1X15_OS_NOT_BUSY) > 0);
 }
 
 
@@ -307,23 +294,9 @@ int16_t ADS1X15::readADC(uint8_t pin)
 }
 
 
-void  ADS1X15::requestADC_Differential_0_1()
-{
-  _requestADC(ADS1X15_MUX_DIFF_0_1);
-}
-
-
 int16_t ADS1X15::readADC_Differential_0_1()
 {
   return _readADC(ADS1X15_MUX_DIFF_0_1);
-}
-
-
-void ADS1X15::requestADC(uint8_t pin)
-{
-  if (pin >= _maxPorts) return;
-  uint16_t mode = ((4 + pin) << 12);   //  pin to mask
-  _requestADC(mode);
 }
 
 
@@ -335,10 +308,103 @@ int16_t ADS1X15::getValue()
 }
 
 
+void ADS1X15::requestADC(uint8_t pin)
+{
+  if (pin >= _maxPorts) return;
+  uint16_t mode = ((4 + pin) << 12);   //  pin to mask
+  _requestADC(mode);
+}
+
+
+void  ADS1X15::requestADC_Differential_0_1()
+{
+  _requestADC(ADS1X15_MUX_DIFF_0_1);
+}
+
+
+bool ADS1X15::isBusy()
+{
+  return isReady() == false;
+}
+
+
+bool ADS1X15::isReady()
+{
+  uint16_t val = _readRegister(_address, ADS1X15_REG_CONFIG);
+  return ((val & ADS1X15_OS_NOT_BUSY) > 0);
+}
+
+
+uint8_t ADS1X15::lastRequest()
+{
+  switch (_lastRequest)
+  {
+    case ADS1X15_READ_0:       return 0x00;
+    case ADS1X15_READ_1:       return 0x01;
+    case ADS1X15_READ_2:       return 0x02;
+    case ADS1X15_READ_3:       return 0x03;
+    //  technically 0x01 -- but would collide with READ_1
+    case ADS1X15_MUX_DIFF_0_1: return 0x10;
+    case ADS1X15_MUX_DIFF_0_3: return 0x30;
+    case ADS1X15_MUX_DIFF_1_3: return 0x31;
+    case ADS1X15_MUX_DIFF_2_3: return 0x32;
+  }
+  return 0xFF;
+}
+
+
+void ADS1X15::setComparatorMode(uint8_t mode)
+{
+  _compMode = mode == 0 ? 0 : 1;
+}
+
+
+uint8_t ADS1X15::getComparatorMode()
+{
+  return _compMode;
+}
+
+
+void ADS1X15::setComparatorPolarity(uint8_t pol)
+{
+  _compPol = pol ? 0 : 1;
+}
+
+
+uint8_t ADS1X15::getComparatorPolarity()
+{
+  return _compPol;
+}
+
+
+void ADS1X15::setComparatorLatch(uint8_t latch)
+{
+  _compLatch = latch ? 0 : 1;
+}
+
+
+uint8_t ADS1X15::getComparatorLatch()
+{
+  return _compLatch;
+}
+
+
+void ADS1X15::setComparatorQueConvert(uint8_t mode)
+{
+  _compQueConvert = (mode < 3) ? mode : 3;
+}
+
+
+uint8_t ADS1X15::getComparatorQueConvert()
+{
+  return _compQueConvert;
+}
+
+
 void ADS1X15::setComparatorThresholdLow(int16_t lo)
 {
   _writeRegister(_address, ADS1X15_REG_LOW_THRESHOLD, lo);
-};
+}
 
 
 int16_t ADS1X15::getComparatorThresholdLow()
@@ -367,17 +433,16 @@ int8_t ADS1X15::getError()
 }
 
 
+//////////////////////////////////////////////////////
+//
+//  EXPERIMENTAL
+//
 void ADS1X15::setWireClock(uint32_t clockSpeed)
 {
   _clockSpeed = clockSpeed;
   _wire->setClock(_clockSpeed);
 }
 
-
-//////////////////////////////////////////////////////
-//
-//  EXPERIMENTAL
-//
 //  see https://github.com/RobTillaart/ADS1X15/issues/22
 //      https://github.com/arduino/Arduino/issues/11457
 //  TODO: get the real clock speed from the I2C interface if possible.
@@ -396,7 +461,7 @@ uint32_t ADS1X15::getWireClock()
 //  not supported.
 //  return -1;
 
-#else  // best effort is remembering it
+#else  //  best effort is remembering it
   return _clockSpeed;
 #endif
 }
@@ -415,7 +480,8 @@ int16_t ADS1X15::_readADC(uint16_t readmode)
   }
   else
   {
-    delay(_conversionDelay);      //  TODO needed in continuous mode?
+    //  needed in continuous mode too, otherwise one get old value.
+    delay(_conversionDelay);
   }
   return getValue();
 }
@@ -437,6 +503,9 @@ void ADS1X15::_requestADC(uint16_t readmode)
   else            config |= ADS1X15_COMP_NON_LATCH;           //  bit 2      ALERT latching
   config |= _compQueConvert;                                  //  bit 0..1   ALERT mode
   _writeRegister(_address, ADS1X15_REG_CONFIG, config);
+
+  //  remember last request type.
+    _lastRequest = readmode;
 }
 
 

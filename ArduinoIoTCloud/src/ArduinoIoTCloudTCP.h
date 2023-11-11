@@ -31,6 +31,11 @@
   #include "tls/utility/CryptoUtil.h"
 #elif defined(BOARD_ESP)
   #include <WiFiClientSecure.h>
+#elif defined(ARDUINO_UNOR4_WIFI)
+  #include <WiFiSSLClient.h>
+#elif defined(ARDUINO_PORTENTA_C33)
+  #include "tls/utility/CryptoUtil.h"
+  #include <SSLClient.h>
 #elif defined(BOARD_HAS_SE050)
   #include "tls/utility/CryptoUtil.h"
   #include <WiFiSSLSE050Client.h>
@@ -81,7 +86,7 @@ class ArduinoIoTCloudTCP: public ArduinoIoTCloudClass
     #endif
     int begin(bool const enable_watchdog = true, String brokerAddress = DEFAULT_BROKER_ADDRESS_SECURE_AUTH, uint16_t brokerPort = DEFAULT_BROKER_PORT_SECURE_AUTH);
 
-    #ifdef BOARD_ESP
+    #ifdef BOARD_HAS_SECRET_KEY
     inline void setBoardId        (String const device_id) { setDeviceId(device_id); }
     inline void setSecretDeviceKey(String const password)  { _password = password;  }
     #endif
@@ -145,11 +150,20 @@ class ArduinoIoTCloudTCP: public ArduinoIoTCloudClass
     CryptoUtil _crypto;
     #elif defined(BOARD_ESP)
     WiFiClientSecure _sslClient;
-    String _password;
+    #elif defined(ARDUINO_UNOR4_WIFI)
+    WiFiSSLClient _sslClient;
+    #elif defined(ARDUINO_PORTENTA_C33)
+    ArduinoIoTCloudCertClass _cert;
+    SSLClient _sslClient;
+    CryptoUtil _crypto;
     #elif defined(BOARD_HAS_SE050)
     ArduinoIoTCloudCertClass _cert;
     WiFiSSLSE050Client _sslClient;
     CryptoUtil _crypto;
+    #endif
+
+    #if defined (BOARD_HAS_SECRET_KEY)
+    String _password;
     #endif
 
     MqttClient _mqttClient;
